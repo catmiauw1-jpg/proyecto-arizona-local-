@@ -1,4 +1,4 @@
-﻿import { calculatedCell, valueInput } from "./fields.js?v=20260620-client-clean-v1";
+﻿import { calculatedCell, valueInput } from "./fields.js?v=20260620-status-fix-v1";
 
 export function dataTable({ columns, rows, rowId, actionPrefix, compact = false }) {
   return `
@@ -65,5 +65,6 @@ export function simpleTable(headers, rows, { compact = false } = {}) {
     </div>
   `;
 }
+
 
 

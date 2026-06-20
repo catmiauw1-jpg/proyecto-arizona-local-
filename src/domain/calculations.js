@@ -1,4 +1,4 @@
-﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260620-client-clean-v1";
+﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260620-status-fix-v1";
 
 function sum(items, selector) {
   return items.reduce((total, item) => total + toNumber(selector(item)), 0);
@@ -7,6 +7,11 @@ function sum(items, selector) {
 function safeDivide(numerator, denominator) {
   const divisor = toNumber(denominator);
   return divisor === 0 ? 0 : toNumber(numerator) / divisor;
+}
+
+function isCompletePercent(value) {
+  const number = toNumber(value);
+  return number <= 1.01 ? number >= 0.999 : number >= 99.9;
 }
 
 export function calculateDiet(diet) {
@@ -48,7 +53,7 @@ export function calculateDiet(diet) {
   };
 
   totals.costBsKg = totals.costBsTon / 1000;
-  totals.status = totalInclusionMsPct >= 99.9 ? "Correcto" : "Incorrecto";
+  totals.status = isCompletePercent(totalInclusionMsPct) ? "Correcto" : "Incorrecto";
   totals.treatmentSharePct = sum(diet.treatments, (treatment) => treatment.sharePct);
   totals.treatmentAb2 =
     diet.id === "ADAPTACION"
@@ -62,7 +67,7 @@ export function calculateDiet(diet) {
     toNumber(diet.treatments[1]?.sharePct) +
     toNumber(diet.treatments[3]?.sharePct) +
     toNumber(diet.treatments[4]?.sharePct);
-  totals.treatmentStatus = totals.treatmentAb3Basis >= 99.9 ? "Correcto" : "Incorrecto";
+  totals.treatmentStatus = isCompletePercent(totals.treatmentAb3Basis) ? "Correcto" : "Incorrecto";
 
   return { ...diet, rows, totals };
 }
@@ -251,5 +256,7 @@ export function calculateState(state) {
     reportRows,
   };
 }
+
+
 
 

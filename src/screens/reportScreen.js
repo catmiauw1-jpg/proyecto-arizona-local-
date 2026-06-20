@@ -1,6 +1,6 @@
-﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260620-client-clean-v1";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-client-clean-v1";
-import { simpleTable } from "../components/table.js?v=20260620-client-clean-v1";
+﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260620-status-fix-v1";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-status-fix-v1";
+import { simpleTable } from "../components/table.js?v=20260620-status-fix-v1";
 
 export function reportScreen(computed) {
   const totalCost = computed.reportRows.reduce((total, row) => total + row.nutritionalCostLot, 0);
@@ -61,6 +61,7 @@ export function reportScreen(computed) {
     ${section("Registro calculado", table)}
   `;
 }
+
 
 
 

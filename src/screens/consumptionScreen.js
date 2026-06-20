@@ -1,6 +1,6 @@
-﻿import { formatNumber, round } from "../domain/formatters.js?v=20260620-client-clean-v1";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-client-clean-v1";
-import { simpleTable } from "../components/table.js?v=20260620-client-clean-v1";
+﻿import { formatNumber, round } from "../domain/formatters.js?v=20260620-status-fix-v1";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-status-fix-v1";
+import { simpleTable } from "../components/table.js?v=20260620-status-fix-v1";
 
 function inputNumber(value) {
   return round(value, 2).toFixed(2);
@@ -70,6 +70,7 @@ export function consumptionScreen(computed) {
     ${section("Consumo por piquete", table)}
   `;
 }
+
 
 
 
