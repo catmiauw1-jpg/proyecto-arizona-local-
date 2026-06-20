@@ -1,7 +1,7 @@
-import { INGREDIENT_COLUMNS } from "../domain/model.js";
-import { formatCurrency, formatPercent } from "../domain/formatters.js";
-import { formulaNote, metricGrid, screenHeader, section, statusPill } from "../components/layout.js";
-import { dataTable, simpleTable } from "../components/table.js";
+﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260620-inputs2";
+import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260620-inputs2";
+import { formulaNote, metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260620-inputs2";
+import { dataTable, simpleTable } from "../components/table.js?v=20260620-inputs2";
 
 export function dietScreen(sheet, state, computed) {
   const diet = computed.diets[sheet.dietId];
@@ -67,3 +67,4 @@ export function dietScreen(sheet, state, computed) {
     ${section("Totales calculados", totals)}
   `;
 }
+

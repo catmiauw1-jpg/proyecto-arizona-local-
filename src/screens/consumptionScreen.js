@@ -1,6 +1,6 @@
-﻿import { formatNumber, round } from "../domain/formatters.js";
-import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js";
-import { simpleTable } from "../components/table.js";
+﻿import { formatNumber, round } from "../domain/formatters.js?v=20260620-inputs2";
+import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-inputs2";
+import { simpleTable } from "../components/table.js?v=20260620-inputs2";
 
 function inputNumber(value) {
   return round(value, 2).toFixed(2);
@@ -75,4 +75,5 @@ export function consumptionScreen(computed) {
     ${section("Consumo por piquete", table)}
   `;
 }
+
 

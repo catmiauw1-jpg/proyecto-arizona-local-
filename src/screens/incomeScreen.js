@@ -1,7 +1,7 @@
-import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js";
-import { formatCell, formatNumber } from "../domain/formatters.js";
-import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js";
-import { dataTable, simpleTable } from "../components/table.js";
+﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260620-inputs2";
+import { formatCell, formatNumber } from "../domain/formatters.js?v=20260620-inputs2";
+import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-inputs2";
+import { dataTable, simpleTable } from "../components/table.js?v=20260620-inputs2";
 
 export function incomeScreen(state, computed) {
   const columns = LOT_COLUMNS.map((column) =>
@@ -73,3 +73,4 @@ export function incomeScreen(state, computed) {
     ${section("Resumen por dieta", dietTotals)}
   `;
 }
+

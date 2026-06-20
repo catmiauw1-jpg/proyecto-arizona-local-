@@ -1,11 +1,11 @@
-﻿import { SHEETS } from "./domain/model.js";
-import { toNumber } from "./domain/formatters.js";
-import { appLayout } from "./components/layout.js";
-import { dietScreen } from "./screens/dietScreen.js";
-import { feedingScreen } from "./screens/feedingScreen.js";
-import { incomeScreen } from "./screens/incomeScreen.js";
-import { consumptionScreen } from "./screens/consumptionScreen.js";
-import { reportScreen } from "./screens/reportScreen.js";
+﻿import { SHEETS } from "./domain/model.js?v=20260620-inputs2";
+import { toNumber } from "./domain/formatters.js?v=20260620-inputs2";
+import { appLayout } from "./components/layout.js?v=20260620-inputs2";
+import { dietScreen } from "./screens/dietScreen.js?v=20260620-inputs2";
+import { feedingScreen } from "./screens/feedingScreen.js?v=20260620-inputs2";
+import { incomeScreen } from "./screens/incomeScreen.js?v=20260620-inputs2";
+import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260620-inputs2";
+import { reportScreen } from "./screens/reportScreen.js?v=20260620-inputs2";
 import {
   applyConsumptionFromCalculated,
   getComputedState,
@@ -17,7 +17,7 @@ import {
   updateIngredient,
   updateLot,
   updateTreatment,
-} from "./state/store.js";
+} from "./state/store.js?v=20260620-inputs2";
 
 const app = document.querySelector("#app");
 
@@ -118,6 +118,7 @@ app.addEventListener("click", handleClick);
 subscribe(render);
 
 render();
+
 
 
 

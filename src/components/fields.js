@@ -1,5 +1,5 @@
-﻿import { DIET_LABELS } from "../domain/model.js";
-import { formatCell, toNumber } from "../domain/formatters.js";
+﻿import { DIET_LABELS } from "../domain/model.js?v=20260620-inputs2";
+import { formatCell, toNumber } from "../domain/formatters.js?v=20260620-inputs2";
 
 export function valueInput({ value, type = "text", onInput, options = [] }) {
   if (type === "select") {
@@ -35,6 +35,7 @@ export function calculatedCell(value, type) {
 export function dietSelect(value, action) {
   return valueInput({ value, type: "select", onInput: action, options: DIET_LABELS });
 }
+
 
 
 

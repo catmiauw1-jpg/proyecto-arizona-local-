@@ -1,4 +1,4 @@
-import { dateDiffInDays, toNumber } from "./formatters.js";
+﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260620-inputs2";
 
 function sum(items, selector) {
   return items.reduce((total, item) => total + toNumber(selector(item)), 0);
@@ -251,3 +251,4 @@ export function calculateState(state) {
     reportRows,
   };
 }
+

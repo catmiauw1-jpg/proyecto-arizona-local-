@@ -1,5 +1,5 @@
-import { sampleData } from "../data/sampleData.js";
-import { calculateState } from "../domain/calculations.js";
+﻿import { sampleData } from "../data/sampleData.js?v=20260620-inputs2";
+import { calculateState } from "../domain/calculations.js?v=20260620-inputs2";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -119,3 +119,4 @@ export function applyConsumptionFromCalculated(consumptionRows) {
   };
   emit();
 }
+

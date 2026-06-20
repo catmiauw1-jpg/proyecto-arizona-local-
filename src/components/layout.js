@@ -1,4 +1,4 @@
-import { SHEETS } from "../domain/model.js";
+﻿import { SHEETS } from "../domain/model.js?v=20260620-inputs2";
 
 export function appLayout({ activeSheet, content }) {
   return `
@@ -83,3 +83,4 @@ export function statusPill(status) {
   const ok = status === "Correcto";
   return `<span class="status-pill ${ok ? "ok" : "warn"}">${status}</span>`;
 }
+

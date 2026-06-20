@@ -1,4 +1,4 @@
-import { calculatedCell, valueInput } from "./fields.js";
+﻿import { calculatedCell, valueInput } from "./fields.js?v=20260620-inputs2";
 
 export function dataTable({ columns, rows, rowId, actionPrefix, compact = false }) {
   return `
@@ -65,3 +65,4 @@ export function simpleTable(headers, rows, { compact = false } = {}) {
     </div>
   `;
 }
+

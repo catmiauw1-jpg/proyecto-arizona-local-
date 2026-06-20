@@ -1,6 +1,6 @@
-﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js";
-import { formulaNote, metricGrid, screenHeader, section, statusPill } from "../components/layout.js";
-import { simpleTable } from "../components/table.js";
+﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260620-inputs2";
+import { formulaNote, metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260620-inputs2";
+import { simpleTable } from "../components/table.js?v=20260620-inputs2";
 
 export function feedingScreen(sheet, state, computed) {
   const diet = state.diets[sheet.dietId];
@@ -79,4 +79,5 @@ export function feedingScreen(sheet, state, computed) {
     ${section("Base de dieta utilizada", simpleTable(["Insumo", "Inclusion M.O", "MS dieta", "Costo"], ingredientRows, { compact: true }))}
   `;
 }
+
 
