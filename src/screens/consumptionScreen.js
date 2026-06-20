@@ -1,4 +1,4 @@
-import { formatNumber, round } from "../domain/formatters.js";
+﻿import { formatNumber, round } from "../domain/formatters.js";
 import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js";
 import { simpleTable } from "../components/table.js";
 
@@ -42,10 +42,10 @@ export function consumptionScreen(computed) {
     formatNumber(row.realizedMs),
     formatNumber(row.expectedMo),
     formatNumber(row.realizedMo),
-    `<input type="number" step="0.01" value="${inputNumber(row.msPlannedManual)}" data-action="updateConsumption:${row.lotId}:msPlannedManual:number" />`,
-    `<input type="number" step="0.01" value="${inputNumber(row.msRealizedManual)}" data-action="updateConsumption:${row.lotId}:msRealizedManual:number" />`,
-    `<input type="number" step="0.01" value="${inputNumber(row.moPlannedManual)}" data-action="updateConsumption:${row.lotId}:moPlannedManual:number" />`,
-    `<input type="number" step="0.01" value="${inputNumber(row.moRealizedManual)}" data-action="updateConsumption:${row.lotId}:moRealizedManual:number" />`,
+    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.msPlannedManual)}" data-action="updateConsumption:${row.lotId}:msPlannedManual:number" />`,
+    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.msRealizedManual)}" data-action="updateConsumption:${row.lotId}:msRealizedManual:number" />`,
+    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.moPlannedManual)}" data-action="updateConsumption:${row.lotId}:moPlannedManual:number" />`,
+    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.moRealizedManual)}" data-action="updateConsumption:${row.lotId}:moRealizedManual:number" />`,
   ]);
 
   const table = simpleTable(
@@ -75,3 +75,4 @@ export function consumptionScreen(computed) {
     ${section("Consumo por piquete", table)}
   `;
 }
+

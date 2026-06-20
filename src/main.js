@@ -1,4 +1,4 @@
-import { SHEETS } from "./domain/model.js";
+﻿import { SHEETS } from "./domain/model.js";
 import { toNumber } from "./domain/formatters.js";
 import { appLayout } from "./components/layout.js";
 import { dietScreen } from "./screens/dietScreen.js";
@@ -58,7 +58,7 @@ function render() {
   });
 }
 
-function handleInput(event) {
+function handleCommit(event) {
   const action = event.target?.dataset?.action;
   if (!action) return;
 
@@ -97,6 +97,13 @@ function handleInput(event) {
 
 }
 
+function handleKeyDown(event) {
+  if (event.key !== "Enter") return;
+  if (!event.target?.dataset?.action) return;
+
+  event.preventDefault();
+  handleCommit(event);
+}
 function handleClick(event) {
   const action = event.target?.closest("[data-action]")?.dataset?.action;
   if (action !== "applyConsumptionFromCalculated") return;
@@ -105,9 +112,12 @@ function handleClick(event) {
 }
 
 window.addEventListener("hashchange", render);
-app.addEventListener("input", handleInput);
-app.addEventListener("change", handleInput);
+app.addEventListener("change", handleCommit);
+app.addEventListener("keydown", handleKeyDown);
 app.addEventListener("click", handleClick);
 subscribe(render);
 
 render();
+
+
+

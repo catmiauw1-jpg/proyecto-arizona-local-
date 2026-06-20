@@ -1,5 +1,20 @@
-export function toNumber(value, fallback = 0) {
-  const number = Number(value);
+﻿export function toNumber(value, fallback = 0) {
+  let normalizedValue = value;
+  if (typeof value === "string") {
+    normalizedValue = value.trim().replace(/\s/g, "");
+    const lastComma = normalizedValue.lastIndexOf(",");
+    const lastDot = normalizedValue.lastIndexOf(".");
+
+    if (lastComma >= 0 && lastDot >= 0) {
+      normalizedValue =
+        lastComma > lastDot
+          ? normalizedValue.replace(/\./g, "").replace(",", ".")
+          : normalizedValue.replace(/,/g, "");
+    } else {
+      normalizedValue = normalizedValue.replace(",", ".");
+    }
+  }
+  const number = Number(normalizedValue);
   return Number.isFinite(number) ? number : fallback;
 }
 
@@ -49,3 +64,4 @@ export function dateDiffInDays(toDate, fromDate) {
   if (Number.isNaN(end.getTime()) || Number.isNaN(start.getTime())) return 0;
   return Math.round((end - start) / 86400000);
 }
+

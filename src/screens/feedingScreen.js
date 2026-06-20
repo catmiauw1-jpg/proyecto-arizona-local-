@@ -1,4 +1,4 @@
-import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js";
+﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js";
 import { formulaNote, metricGrid, screenHeader, section, statusPill } from "../components/layout.js";
 import { simpleTable } from "../components/table.js";
 
@@ -19,14 +19,14 @@ export function feedingScreen(sheet, state, computed) {
         .map(
           (treatment) => `
             <div class="treatment-row">
-              <strong>${treatment.number}° trato</strong>
+              <strong>${treatment.number}Â° trato</strong>
               <label>
                 <span>Horario</span>
                 <span class="locked-field">${treatment.time}</span>
               </label>
               <label>
                 <span>Porcentaje</span>
-                <input type="number" step="0.001" value="${treatment.sharePct}" data-action="updateTreatment:${diet.id}:${treatment.number}:sharePct:percent" />
+                <input type="text" inputmode="decimal" step="0.001" value="${treatment.sharePct}" data-action="updateTreatment:${diet.id}:${treatment.number}:sharePct:percent" />
               </label>
             </div>
           `,
@@ -79,3 +79,4 @@ export function feedingScreen(sheet, state, computed) {
     ${section("Base de dieta utilizada", simpleTable(["Insumo", "Inclusion M.O", "MS dieta", "Costo"], ingredientRows, { compact: true }))}
   `;
 }
+
