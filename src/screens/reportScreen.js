@@ -1,6 +1,6 @@
-﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260620-inputs2";
-import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-inputs2";
-import { simpleTable } from "../components/table.js?v=20260620-inputs2";
+﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260620-client-clean-v1";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-client-clean-v1";
+import { simpleTable } from "../components/table.js?v=20260620-client-clean-v1";
 
 export function reportScreen(computed) {
   const totalCost = computed.reportRows.reduce((total, row) => total + row.nutritionalCostLot, 0);
@@ -10,9 +10,9 @@ export function reportScreen(computed) {
     Math.max(computed.reportRows.length, 1);
 
   const header = screenHeader({
-    eyebrow: "Hoja REGISTRO",
+    eyebrow: "Modulo REGISTRO",
     title: "Informe financiero nutricional",
-    description: "Resumen calculado por corral, equivalente al informe final del Excel.",
+    description: "Resumen calculado por corral con resultados nutricionales y financieros.",
   });
 
   const metrics = metricGrid([
@@ -57,13 +57,10 @@ export function reportScreen(computed) {
 
   return `
     ${header}
-    ${formulaNote({
-      status: "pending",
-      title: "REGISTRO pendiente de validacion exacta",
-      text: "La pantalla replica el informe por corral, pero las 782 formulas del bloque REGISTRO deben revisarse contra Excel antes de declararlas exactas.",
-    })}
     ${metrics}
     ${section("Registro calculado", table)}
   `;
 }
+
+
 

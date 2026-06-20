@@ -1,16 +1,16 @@
-﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260620-inputs2";
-import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260620-inputs2";
-import { formulaNote, metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260620-inputs2";
-import { dataTable, simpleTable } from "../components/table.js?v=20260620-inputs2";
+﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260620-client-clean-v1";
+import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260620-client-clean-v1";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260620-client-clean-v1";
+import { dataTable, simpleTable } from "../components/table.js?v=20260620-client-clean-v1";
 
 export function dietScreen(sheet, state, computed) {
   const diet = computed.diets[sheet.dietId];
   const rawDiet = state.diets[sheet.dietId];
 
   const header = screenHeader({
-    eyebrow: `Hoja ${sheet.id}`,
+    eyebrow: `Modulo ${sheet.id}`,
     title: rawDiet.title,
-    description: "Formula base de dieta: entradas manuales a la izquierda, resultados calculados bloqueados.",
+    description: "Gestiona ingredientes, costos y resultados calculados de la dieta.",
   });
 
   const metrics = metricGrid([
@@ -56,15 +56,12 @@ export function dietScreen(sheet, state, computed) {
 
   return `
     ${header}
-    ${formulaNote({
-      status: "exact",
-      title: "Formula Excel replicada",
-      text: "Se replica el bloque D7:H17: inclusion MO, normalizacion, MS dieta, costo por insumo y totales. La validacion C17 conserva la condicion original >= 99.9.",
-    })}
     ${metrics}
     ${section("Parametros de dieta", setup)}
     ${section("Ingredientes", table)}
     ${section("Totales calculados", totals)}
   `;
 }
+
+
 

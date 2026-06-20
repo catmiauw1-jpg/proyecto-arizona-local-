@@ -1,6 +1,6 @@
-﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260620-inputs2";
-import { formulaNote, metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260620-inputs2";
-import { simpleTable } from "../components/table.js?v=20260620-inputs2";
+﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260620-client-clean-v1";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260620-client-clean-v1";
+import { simpleTable } from "../components/table.js?v=20260620-client-clean-v1";
 
 export function feedingScreen(sheet, state, computed) {
   const diet = state.diets[sheet.dietId];
@@ -8,9 +8,9 @@ export function feedingScreen(sheet, state, computed) {
   const plan = computed.feedingPlan[sheet.dietId];
 
   const header = screenHeader({
-    eyebrow: `Hoja ${sheet.id}`,
+    eyebrow: `Modulo ${sheet.id}`,
     title: `Reparto de tratos - ${sheet.label}`,
-    description: "Replica el reparto de alimento por dieta, piquete y cinco tratos.",
+    description: "Organiza el reparto de alimento por dieta, piquete y trato.",
   });
 
   const treatmentInputs = `
@@ -68,16 +68,13 @@ export function feedingScreen(sheet, state, computed) {
 
   return `
     ${header}
-    ${formulaNote({
-      status: "pending",
-      title: "Formula pendiente de validacion exacta",
-      text: "Los porcentajes amarillos de E2, J2, O2, T2 y Z2 son editables. La distribucion por piquete/trato se calcula con la regla principal del Excel, pero falta validar celda por celda los rangos A4:AG36 contra el archivo original.",
-    })}
     ${section("Configuracion de tratos", treatmentInputs)}
     ${metrics}
     ${section("Plan por piquete y trato", planTable)}
     ${section("Base de dieta utilizada", simpleTable(["Insumo", "Inclusion M.O", "MS dieta", "Costo"], ingredientRows, { compact: true }))}
   `;
 }
+
+
 
 

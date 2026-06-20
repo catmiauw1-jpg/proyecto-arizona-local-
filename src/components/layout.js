@@ -1,4 +1,4 @@
-﻿import { SHEETS } from "../domain/model.js?v=20260620-inputs2";
+﻿import { SHEETS } from "../domain/model.js?v=20260620-client-clean-v1";
 
 export function appLayout({ activeSheet, content }) {
   return `
@@ -8,7 +8,7 @@ export function appLayout({ activeSheet, content }) {
           <div class="brand-mark">CA</div>
           <div>
             <strong>Confinamiento Arizona</strong>
-            <span>Version Excel a programa</span>
+            <span>Sistema de gestion</span>
           </div>
         </div>
         <nav class="nav-list">
@@ -83,4 +83,6 @@ export function statusPill(status) {
   const ok = status === "Correcto";
   return `<span class="status-pill ${ok ? "ok" : "warn"}">${status}</span>`;
 }
+
+
 

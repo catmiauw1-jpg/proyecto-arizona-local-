@@ -1,7 +1,7 @@
-﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260620-inputs2";
-import { formatCell, formatNumber } from "../domain/formatters.js?v=20260620-inputs2";
-import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-inputs2";
-import { dataTable, simpleTable } from "../components/table.js?v=20260620-inputs2";
+﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260620-client-clean-v1";
+import { formatCell, formatNumber } from "../domain/formatters.js?v=20260620-client-clean-v1";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-client-clean-v1";
+import { dataTable, simpleTable } from "../components/table.js?v=20260620-client-clean-v1";
 
 export function incomeScreen(state, computed) {
   const columns = LOT_COLUMNS.map((column) =>
@@ -13,9 +13,9 @@ export function incomeScreen(state, computed) {
   const totalMo = computed.lots.reduce((total, lot) => total + lot.totalFeedMo, 0);
 
   const header = screenHeader({
-    eyebrow: "Hoja Ingreso",
+    eyebrow: "Modulo Ingreso",
     title: "Ingreso de lotes y calculo inicial",
-    description: "Primera pantalla funcional: edita los datos manuales y revisa los resultados equivalentes a formulas.",
+    description: "Edita los datos de lotes y revisa los resultados iniciales.",
   });
 
   const config = `
@@ -62,15 +62,12 @@ export function incomeScreen(state, computed) {
 
   return `
     ${header}
-    ${formulaNote({
-      status: "exact",
-      title: "Formula Excel replicada",
-      text: "Se replican F, I, J, L, M, O, P, Q y el resumen B30:D32. Los campos amarillos A, B, C, D, K y N son editables.",
-    })}
     ${section("Datos generales", config)}
     ${metrics}
     ${section("Lotes / piquetes", lotsTable)}
     ${section("Resumen por dieta", dietTotals)}
   `;
 }
+
+
 

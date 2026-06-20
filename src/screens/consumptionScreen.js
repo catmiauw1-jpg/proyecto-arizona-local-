@@ -1,6 +1,6 @@
-﻿import { formatNumber, round } from "../domain/formatters.js?v=20260620-inputs2";
-import { formulaNote, metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-inputs2";
-import { simpleTable } from "../components/table.js?v=20260620-inputs2";
+﻿import { formatNumber, round } from "../domain/formatters.js?v=20260620-client-clean-v1";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-client-clean-v1";
+import { simpleTable } from "../components/table.js?v=20260620-client-clean-v1";
 
 function inputNumber(value) {
   return round(value, 2).toFixed(2);
@@ -13,7 +13,7 @@ export function consumptionScreen(computed) {
   const totalRealizedMo = computed.consumptionRows.reduce((total, row) => total + row.realizedMo, 0);
 
   const header = screenHeader({
-    eyebrow: "Hoja ANOTACION DE CONSUMO",
+    eyebrow: "Modulo ANOTACION DE CONSUMO",
     title: "Anotacion de consumo",
     description: "Consolida previsto/realizado y permite capturar ajustes manuales por piquete.",
     actions: `
@@ -21,9 +21,9 @@ export function consumptionScreen(computed) {
         class="primary-action"
         type="button"
         data-action="applyConsumptionFromCalculated"
-        title="Replica Macro3: copia C3:F22 y pega valores en H3:K22"
+        title="Copia los valores calculados a los campos editables"
       >
-        Copiar calculados a amarillos
+        Copiar valores calculados
       </button>
     `,
   });
@@ -66,14 +66,11 @@ export function consumptionScreen(computed) {
 
   return `
     ${header}
-    ${formulaNote({
-      status: "exact",
-      title: "Flecha del Excel",
-      text: "La macro Macro3 copia los valores de C3:F22 y los pega en H3:K22. El boton replica esa accion sobre las columnas amarillas editables.",
-    })}
     ${metrics}
     ${section("Consumo por piquete", table)}
   `;
 }
+
+
 
 
