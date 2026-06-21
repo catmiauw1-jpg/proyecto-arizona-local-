@@ -1,7 +1,7 @@
-﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-state";
-import { formatCell, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-state";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-state";
-import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-state";
+﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-all";
+import { formatCell, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-all";
+import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
 
 export function incomeScreen(state, computed) {
   const columns = LOT_COLUMNS.map((column) =>
@@ -68,6 +68,7 @@ export function incomeScreen(state, computed) {
     ${section("Resumen por dieta", dietTotals)}
   `;
 }
+
 
 
 

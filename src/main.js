@@ -1,11 +1,11 @@
-﻿import { SHEETS } from "./domain/model.js?v=20260621-stage1-clean-state";
-import { toNumber } from "./domain/formatters.js?v=20260621-stage1-clean-state";
-import { appLayout } from "./components/layout.js?v=20260621-stage1-clean-state";
-import { dietScreen } from "./screens/dietScreen.js?v=20260621-stage1-clean-state";
-import { feedingScreen } from "./screens/feedingScreen.js?v=20260621-stage1-clean-state";
-import { incomeScreen } from "./screens/incomeScreen.js?v=20260621-stage1-clean-state";
-import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260621-stage1-clean-state";
-import { reportScreen } from "./screens/reportScreen.js?v=20260621-stage1-clean-state";
+﻿import { SHEETS } from "./domain/model.js?v=20260621-stage1-clean-all";
+import { toNumber } from "./domain/formatters.js?v=20260621-stage1-clean-all";
+import { appLayout } from "./components/layout.js?v=20260621-stage1-clean-all";
+import { dietScreen } from "./screens/dietScreen.js?v=20260621-stage1-clean-all";
+import { feedingScreen } from "./screens/feedingScreen.js?v=20260621-stage1-clean-all";
+import { incomeScreen } from "./screens/incomeScreen.js?v=20260621-stage1-clean-all";
+import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260621-stage1-clean-all";
+import { reportScreen } from "./screens/reportScreen.js?v=20260621-stage1-clean-all";
 import {
   applyConsumptionFromCalculated,
   getComputedState,
@@ -17,7 +17,7 @@ import {
   updateIngredient,
   updateLot,
   updateTreatment,
-} from "./state/store.js?v=20260621-stage1-clean-state";
+} from "./state/store.js?v=20260621-stage1-clean-all";
 
 const app = document.querySelector("#app");
 
@@ -118,6 +118,7 @@ app.addEventListener("click", handleClick);
 subscribe(render);
 
 render();
+
 
 
 

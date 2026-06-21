@@ -1,5 +1,5 @@
-﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260621-stage1-clean-state";
-import { calculateState } from "../domain/calculations.js?v=20260621-stage1-clean-state";
+﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260621-stage1-clean-all";
+import { calculateState } from "../domain/calculations.js?v=20260621-stage1-clean-all";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -119,6 +119,7 @@ export function applyConsumptionFromCalculated(consumptionRows) {
   };
   emit();
 }
+
 
 
 

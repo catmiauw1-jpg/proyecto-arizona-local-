@@ -1,4 +1,4 @@
-﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260621-stage1-clean-state";
+﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260621-stage1-clean-all";
 
 function sum(items, selector) {
   return items.reduce((total, item) => total + toNumber(selector(item)), 0);
@@ -14,7 +14,7 @@ function isCompletePercent(value) {
   return number <= 1.01 ? number >= 0.999 : number >= 99.9;
 }
 
-function hasOperationalLot(lot) {
+export function hasOperationalLot(lot) {
   return Boolean(
     lot.entryDate ||
       lot.lotCode ||
@@ -198,7 +198,7 @@ export function calculateFeedingPlan(state, calculatedDiets, calculatedLots) {
 }
 
 export function calculateConsumptionRows(state, calculatedLots, feedingPlan) {
-  return calculatedLots.map((lot) => {
+  return calculatedLots.filter(hasOperationalLot).map((lot) => {
     const plan = feedingPlan[lot.currentDiet]?.lotRows.find((row) => row.lotId === lot.id);
     const note = state.consumptionNotes[lot.id] ?? {};
     const msPlannedManual = note.msPlannedManual ?? "";
@@ -267,6 +267,8 @@ export function calculateState(state) {
     reportRows,
   };
 }
+
+
 
 
 

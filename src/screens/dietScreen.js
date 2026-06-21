@@ -1,7 +1,7 @@
-﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-state";
-import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260621-stage1-clean-state";
-import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260621-stage1-clean-state";
-import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-state";
+﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-all";
+import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260621-stage1-clean-all";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260621-stage1-clean-all";
+import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
 
 export function dietScreen(sheet, state, computed) {
   const diet = computed.diets[sheet.dietId];
@@ -62,6 +62,7 @@ export function dietScreen(sheet, state, computed) {
     ${section("Totales calculados", totals)}
   `;
 }
+
 
 
 

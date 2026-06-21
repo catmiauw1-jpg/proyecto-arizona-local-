@@ -1,4 +1,4 @@
-﻿import { SHEETS } from "../domain/model.js?v=20260621-stage1-clean-state";
+﻿import { SHEETS } from "../domain/model.js?v=20260621-stage1-clean-all";
 
 export function appLayout({ activeSheet, content }) {
   return `
@@ -83,6 +83,7 @@ export function statusPill(status) {
   const ok = status === "Correcto";
   return `<span class="status-pill ${ok ? "ok" : "warn"}">${status}</span>`;
 }
+
 
 
 
