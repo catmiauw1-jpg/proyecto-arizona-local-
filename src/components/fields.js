@@ -1,5 +1,5 @@
-﻿import { DIET_LABELS } from "../domain/model.js?v=20260620-status-fix-v1";
-import { formatCell, toNumber } from "../domain/formatters.js?v=20260620-status-fix-v1";
+﻿import { DIET_LABELS } from "../domain/model.js?v=20260621-stage1-clean-state";
+import { formatCell, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-state";
 
 export function valueInput({ value, type = "text", onInput, options = [] }) {
   if (type === "select") {
@@ -15,7 +15,7 @@ export function valueInput({ value, type = "text", onInput, options = [] }) {
   const isNumeric = ["number", "percent", "currency", "integer"].includes(type);
   const inputType = type === "date" ? "date" : "text";
   const step = type === "percent" ? "0.001" : type === "number" || type === "currency" ? "0.01" : "1";
-  const shownValue = type === "percent" ? toNumber(value) : value;
+  const shownValue = type === "percent" && value !== "" && value !== null && value !== undefined ? toNumber(value) : value;
 
   return `
     <input
@@ -35,6 +35,8 @@ export function calculatedCell(value, type) {
 export function dietSelect(value, action) {
   return valueInput({ value, type: "select", onInput: action, options: DIET_LABELS });
 }
+
+
 
 
 

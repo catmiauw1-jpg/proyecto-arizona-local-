@@ -1,11 +1,11 @@
-﻿import { sampleData } from "../data/sampleData.js?v=20260620-status-fix-v1";
-import { calculateState } from "../domain/calculations.js?v=20260620-status-fix-v1";
+﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260621-stage1-clean-state";
+import { calculateState } from "../domain/calculations.js?v=20260621-stage1-clean-state";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-let state = clone(sampleData);
+let state = clone(createEmptyPeriodState());
 const listeners = new Set();
 
 export function getState() {
@@ -119,6 +119,8 @@ export function applyConsumptionFromCalculated(consumptionRows) {
   };
   emit();
 }
+
+
 
 
 

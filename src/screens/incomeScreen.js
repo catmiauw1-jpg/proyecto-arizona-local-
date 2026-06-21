@@ -1,11 +1,11 @@
-﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260620-status-fix-v1";
-import { formatCell, formatNumber } from "../domain/formatters.js?v=20260620-status-fix-v1";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-status-fix-v1";
-import { dataTable, simpleTable } from "../components/table.js?v=20260620-status-fix-v1";
+﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-state";
+import { formatCell, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-state";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-state";
+import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-state";
 
 export function incomeScreen(state, computed) {
   const columns = LOT_COLUMNS.map((column) =>
-    column.key === "currentDiet" ? { ...column, options: DIET_LABELS } : column,
+    column.key === "currentDiet" ? { ...column, options: ["", ...DIET_LABELS] } : column,
   );
 
   const totalAnimals = computed.lots.reduce((total, lot) => total + Number(lot.animalCount || 0), 0);
@@ -68,6 +68,8 @@ export function incomeScreen(state, computed) {
     ${section("Resumen por dieta", dietTotals)}
   `;
 }
+
+
 
 
 

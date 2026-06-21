@@ -1,4 +1,4 @@
-export const SHEETS = [
+﻿export const SHEETS = [
   { id: "ADAPT", label: "ADAPT", kind: "diet", dietId: "ADAPTACION" },
   { id: "TRANS", label: "TRANS", kind: "diet", dietId: "TRANSICION" },
   { id: "TERM", label: "TERM", kind: "diet", dietId: "TERMINACION" },
@@ -32,9 +32,9 @@ export const INGREDIENT_COLUMNS = [
 export const LOT_COLUMNS = [
   { key: "entryDate", label: "Fecha ingreso", input: true, type: "date" },
   { key: "pen", label: "Piquete", input: true, type: "text" },
-  { key: "lotCode", label: "Lote", input: true, type: "number" },
+  { key: "lotCode", label: "Lote", input: true, type: "text" },
   { key: "animalCount", label: "Cantidad animales", input: true, type: "number" },
-  { key: "initialWeight", label: "Peso inicial", input: false, role: "locked", type: "number" },
+  { key: "initialWeight", label: "Peso inicial", input: true, type: "number" },
   { key: "estimatedWeight", label: "Peso estimado", input: false, type: "number" },
   { key: "initialImsPct", label: "IMS %PV inicial", input: false, role: "locked", type: "percent" },
   { key: "estimatedGmd", label: "GMD estimado", input: false, role: "locked", type: "number" },
@@ -56,3 +56,5 @@ export const TREATMENTS = [
   { number: 4, timeKey: "time4", shareKey: "share4" },
   { number: 5, timeKey: "time5", shareKey: "share5" },
 ];
+
+

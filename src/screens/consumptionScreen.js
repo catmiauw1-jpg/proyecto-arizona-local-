@@ -1,8 +1,9 @@
-﻿import { formatNumber, round } from "../domain/formatters.js?v=20260620-status-fix-v1";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260620-status-fix-v1";
-import { simpleTable } from "../components/table.js?v=20260620-status-fix-v1";
+﻿import { formatNumber, round } from "../domain/formatters.js?v=20260621-stage1-clean-state";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-state";
+import { simpleTable } from "../components/table.js?v=20260621-stage1-clean-state";
 
 function inputNumber(value) {
+  if (value === "" || value === null || value === undefined) return "";
   return round(value, 2).toFixed(2);
 }
 
@@ -70,6 +71,8 @@ export function consumptionScreen(computed) {
     ${section("Consumo por piquete", table)}
   `;
 }
+
+
 
 
 

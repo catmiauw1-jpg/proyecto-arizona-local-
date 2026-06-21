@@ -1,4 +1,4 @@
-﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260620-status-fix-v1";
+﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260621-stage1-clean-state";
 
 function sum(items, selector) {
   return items.reduce((total, item) => total + toNumber(selector(item)), 0);
@@ -12,6 +12,17 @@ function safeDivide(numerator, denominator) {
 function isCompletePercent(value) {
   const number = toNumber(value);
   return number <= 1.01 ? number >= 0.999 : number >= 99.9;
+}
+
+function hasOperationalLot(lot) {
+  return Boolean(
+    lot.entryDate ||
+      lot.lotCode ||
+      lot.currentDiet ||
+      toNumber(lot.animalCount) > 0 ||
+      toNumber(lot.initialWeight) > 0 ||
+      toNumber(lot.consumptionAdjustmentPct) !== 0
+  );
 }
 
 export function calculateDiet(diet) {
@@ -190,10 +201,10 @@ export function calculateConsumptionRows(state, calculatedLots, feedingPlan) {
   return calculatedLots.map((lot) => {
     const plan = feedingPlan[lot.currentDiet]?.lotRows.find((row) => row.lotId === lot.id);
     const note = state.consumptionNotes[lot.id] ?? {};
-    const msPlannedManual = toNumber(note.msPlannedManual);
-    const msRealizedManual = toNumber(note.msRealizedManual);
-    const moPlannedManual = toNumber(note.moPlannedManual);
-    const moRealizedManual = toNumber(note.moRealizedManual);
+    const msPlannedManual = note.msPlannedManual ?? "";
+    const msRealizedManual = note.msRealizedManual ?? "";
+    const moPlannedManual = note.moPlannedManual ?? "";
+    const moRealizedManual = note.moRealizedManual ?? "";
 
     return {
       lotId: lot.id,
@@ -212,7 +223,7 @@ export function calculateConsumptionRows(state, calculatedLots, feedingPlan) {
 }
 
 export function calculateReportRows(calculatedLots, consumptionRows, feedingPlan) {
-  return calculatedLots.map((lot) => {
+  return calculatedLots.filter(hasOperationalLot).map((lot) => {
     const consumption = consumptionRows.find((row) => row.lotId === lot.id);
     const planRow = feedingPlan[lot.currentDiet]?.lotRows.find((row) => row.lotId === lot.id);
     const cmoLot = consumption?.moRealizedManual || consumption?.realizedMo || 0;
@@ -256,6 +267,8 @@ export function calculateState(state) {
     reportRows,
   };
 }
+
+
 
 
 
