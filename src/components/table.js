@@ -27,10 +27,10 @@ export function dataTable({ columns, rows, rowId, actionPrefix, compact = false 
                       const value = row[column.key];
                       if (!column.input) {
                       const cellClass = column.role === "locked" ? "locked-cell" : "calc-cell";
-                      return `<td class="${cellClass}">${calculatedCell(value, column.type)}</td>`;
+                      return `<td class="${cellClass}" data-label="${column.label}">${calculatedCell(value, column.type)}</td>`;
                       }
                       return `
-                        <td class="input-cell">
+                        <td class="input-cell" data-label="${column.label}">
                           ${valueInput({
                             value,
                             type: column.type,

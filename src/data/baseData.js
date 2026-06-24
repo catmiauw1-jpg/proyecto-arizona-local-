@@ -93,7 +93,7 @@ export function buildEmptyLots(totalLots = 20) {
       initialImsPct: 0.016,
       estimatedGmd: 1.5,
       currentDiet: "",
-      consumptionAdjustmentPct: "",
+      consumptionAdjustmentPct: 0,
     };
   });
 }

@@ -277,6 +277,15 @@ table {
   min-width: 620px;
 }
 
+.animal-consumption-table table {
+  min-width: 560px;
+}
+
+.animal-consumption-table th,
+.animal-consumption-table td {
+  min-width: 92px;
+}
+
 th,
 td {
   min-width: 110px;
@@ -581,5 +590,59 @@ th:last-child {
   .form-grid.small,
   .treatment-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .animal-consumption-table .table-wrap {
+    overflow: visible;
+    border: 0;
+  }
+
+  .animal-consumption-table table,
+  .animal-consumption-table thead,
+  .animal-consumption-table tbody,
+  .animal-consumption-table tr,
+  .animal-consumption-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .animal-consumption-table table {
+    background: transparent;
+  }
+
+  .animal-consumption-table thead {
+    display: none;
+  }
+
+  .animal-consumption-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .animal-consumption-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .animal-consumption-table td {
+    display: grid;
+    gap: 5px;
+    border-right: 0;
+    padding: 8px;
+    white-space: normal;
+  }
+
+  .animal-consumption-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
   }
 }

@@ -49,6 +49,27 @@ export function incomeScreen(state, computed) {
     actionPrefix: "updateLot",
   });
 
+  const animalConsumptionColumns = [
+    { key: "pen", label: "Piquete", input: false, role: "locked", type: "text" },
+    { key: "lotCode", label: "Lote", input: false, role: "locked", type: "text" },
+    { key: "consumptionAdjustmentPct", label: "Ajuste de Consumo", input: true, type: "percent" },
+    { key: "cmsPerAnimal", label: "CMS/ Animal", input: false, type: "number" },
+    { key: "cmoPerAnimal", label: "CMO/ Animal", input: false, type: "number" },
+    { key: "cmsPctAnimal", label: "%CMS/ Animal", input: false, type: "percent" },
+  ];
+
+  const animalConsumptionTable = `
+    <div class="animal-consumption-table">
+      ${dataTable({
+        columns: animalConsumptionColumns,
+        rows: computed.lots,
+        rowId: (row) => row.id,
+        actionPrefix: "updateLot",
+        compact: true,
+      })}
+    </div>
+  `;
+
   const dietTotals = simpleTable(
     ["Dieta", "Cantidad kg/MS", "Cantidad kg/MO", "%MS"],
     DIET_LABELS.map((dietId) => [
@@ -65,6 +86,7 @@ export function incomeScreen(state, computed) {
     ${section("Datos generales", config)}
     ${metrics}
     ${section("Lotes / piquetes", lotsTable)}
+    ${section("Consumo por animal", animalConsumptionTable)}
     ${section("Resumen por dieta", dietTotals)}
   `;
 }

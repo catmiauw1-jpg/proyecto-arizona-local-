@@ -43,10 +43,10 @@ export const LOT_COLUMNS = [
   { key: "currentDiet", label: "Dieta actual", input: true, type: "select" },
   { key: "totalFeedMs", label: "Total alimento MS", input: false, type: "number" },
   { key: "totalFeedMo", label: "Total alimento MO", input: false, type: "number" },
-  { key: "consumptionAdjustmentPct", label: "Ajuste consumo", input: true, type: "percent" },
-  { key: "cmsPerAnimal", label: "CMS/animal", input: false, type: "number" },
-  { key: "cmoPerAnimal", label: "CMO/animal", input: false, type: "number" },
-  { key: "cmsPctAnimal", label: "%CMS/animal", input: false, type: "percent" },
+  { key: "consumptionAdjustmentPct", label: "Ajuste de Consumo", input: true, type: "percent" },
+  { key: "cmsPerAnimal", label: "CMS/ Animal", input: false, type: "number" },
+  { key: "cmoPerAnimal", label: "CMO/ Animal", input: false, type: "number" },
+  { key: "cmsPctAnimal", label: "%CMS/ Animal", input: false, type: "percent" },
 ];
 
 export const TREATMENTS = [
