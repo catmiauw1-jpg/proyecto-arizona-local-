@@ -3,9 +3,24 @@ import { formatCurrency, formatPercent } from "../domain/formatters.js?v=2026062
 import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260621-stage1-clean-all";
 import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
 
+const ADAPT_INGREDIENT_COLUMNS = [
+  { key: "name", label: "INSUMOS", type: "text", input: true },
+  { key: "dryMatterPct", label: "%MS", type: "percent", input: true },
+  { key: "inclusionMsPct", label: "%INCLUSIÓN EN MS", type: "percent", input: true },
+  { key: "normalizedMoPct", label: "%INCLUSIÓN EN M.O", type: "percent", input: false },
+  { key: "dietDryMatterPct", label: "%MS DIETA", type: "percent", input: false },
+  { key: "costBsTon", label: "Costo (Bs/ton)", type: "currency", input: true },
+  { key: "costContributionBsTon", label: "Costo (Bs/ton)", type: "currency", input: false },
+];
+
 export function dietScreen(sheet, state, computed) {
   const diet = computed.diets[sheet.dietId];
   const rawDiet = state.diets[sheet.dietId];
+  const isAdapt = sheet.id === "ADAPT";
+  const ingredientColumns = isAdapt ? ADAPT_INGREDIENT_COLUMNS : INGREDIENT_COLUMNS;
+  const totalHeaders = isAdapt
+    ? ["Total MS", "Total MO", "Inclusión M.O", "MS Dieta", "Costo dieta"]
+    : ["Total MS", "Total MO", "Total inclusion M.O", "MS dieta", "Costo Bs/ton"];
 
   const header = screenHeader({
     eyebrow: `Modulo ${sheet.id}`,
@@ -34,14 +49,14 @@ export function dietScreen(sheet, state, computed) {
   `;
 
   const table = dataTable({
-    columns: INGREDIENT_COLUMNS,
+    columns: ingredientColumns,
     rows: diet.rows,
     rowId: (row) => row.id,
     actionPrefix: `updateIngredient:${rawDiet.id}`,
   });
 
   const totals = simpleTable(
-    ["Total MS", "Total MO", "Total inclusion M.O", "MS dieta", "Costo Bs/ton"],
+    totalHeaders,
     [
       [
         formatPercent(diet.totals.totalInclusionMsPct),
