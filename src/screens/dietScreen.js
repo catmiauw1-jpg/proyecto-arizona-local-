@@ -3,7 +3,7 @@ import { formatCurrency, formatPercent } from "../domain/formatters.js?v=2026062
 import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260621-stage1-clean-all";
 import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
 
-const ADAPT_INGREDIENT_COLUMNS = [
+const EXCEL_DIET_COLUMNS = [
   { key: "name", label: "INSUMOS", type: "text", input: true },
   { key: "dryMatterPct", label: "%MS", type: "percent", input: true },
   { key: "inclusionMsPct", label: "%INCLUSIÓN EN MS", type: "percent", input: true },
@@ -16,9 +16,9 @@ const ADAPT_INGREDIENT_COLUMNS = [
 export function dietScreen(sheet, state, computed) {
   const diet = computed.diets[sheet.dietId];
   const rawDiet = state.diets[sheet.dietId];
-  const isAdapt = sheet.id === "ADAPT";
-  const ingredientColumns = isAdapt ? ADAPT_INGREDIENT_COLUMNS : INGREDIENT_COLUMNS;
-  const totalHeaders = isAdapt
+  const usesExcelDietColumns = sheet.id === "ADAPT" || sheet.id === "TRANS";
+  const ingredientColumns = usesExcelDietColumns ? EXCEL_DIET_COLUMNS : INGREDIENT_COLUMNS;
+  const totalHeaders = usesExcelDietColumns
     ? ["Total MS", "Total MO", "Inclusión M.O", "MS Dieta", "Costo dieta"]
     : ["Total MS", "Total MO", "Total inclusion M.O", "MS dieta", "Costo Bs/ton"];
 
