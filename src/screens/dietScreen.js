@@ -16,7 +16,7 @@ const EXCEL_DIET_COLUMNS = [
 export function dietScreen(sheet, state, computed) {
   const diet = computed.diets[sheet.dietId];
   const rawDiet = state.diets[sheet.dietId];
-  const usesExcelDietColumns = sheet.id === "ADAPT" || sheet.id === "TRANS";
+  const usesExcelDietColumns = sheet.id === "ADAPT" || sheet.id === "TRANS" || sheet.id === "TERM";
   const ingredientColumns = usesExcelDietColumns ? EXCEL_DIET_COLUMNS : INGREDIENT_COLUMNS;
   const totalHeaders = usesExcelDietColumns
     ? ["Total MS", "Total MO", "Inclusión M.O", "MS Dieta", "Costo dieta"]
