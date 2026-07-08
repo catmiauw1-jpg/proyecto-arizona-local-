@@ -14,6 +14,7 @@ import {
   updateConfig,
   updateConsumption,
   updateDietField,
+  updateFeedingActual,
   updateIngredient,
   updateLot,
   updateTreatment,
@@ -93,6 +94,11 @@ function handleCommit(event) {
   if (command === "updateConsumption") {
     const [, lotId, key, type] = parts;
     updateConsumption(lotId, key, parseValue(event.target.value, type));
+  }
+
+  if (command === "updateFeedingActual") {
+    const [, dietId, lotId, treatmentNumber, type] = parts;
+    updateFeedingActual(dietId, lotId, Number(treatmentNumber), parseValue(event.target.value, type));
   }
 
 }

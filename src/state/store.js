@@ -100,6 +100,26 @@ export function updateConsumption(lotId, key, value) {
   emit();
 }
 
+export function updateFeedingActual(dietId, lotId, treatmentNumber, value) {
+  const dietActuals = state.feedingActuals?.[dietId] ?? {};
+  const lotActuals = dietActuals[lotId] ?? {};
+
+  state = {
+    ...state,
+    feedingActuals: {
+      ...(state.feedingActuals ?? {}),
+      [dietId]: {
+        ...dietActuals,
+        [lotId]: {
+          ...lotActuals,
+          [treatmentNumber]: value,
+        },
+      },
+    },
+  };
+  emit();
+}
+
 export function applyConsumptionFromCalculated(consumptionRows) {
   const consumptionNotes = { ...state.consumptionNotes };
 

@@ -286,6 +286,15 @@ table {
   min-width: 92px;
 }
 
+.adaptation-feeding-table table {
+  min-width: 2480px;
+}
+
+.adaptation-feeding-table th,
+.adaptation-feeding-table td {
+  min-width: 104px;
+}
+
 th,
 td {
   min-width: 110px;

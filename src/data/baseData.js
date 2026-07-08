@@ -108,6 +108,7 @@ export function createEmptyPeriodState() {
     diets: JSON.parse(JSON.stringify(baseDiets)),
     lots: buildEmptyLots(20),
     consumptionNotes: {},
+    feedingActuals: {},
   };
 }
 
