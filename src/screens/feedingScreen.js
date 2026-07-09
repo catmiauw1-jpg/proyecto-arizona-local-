@@ -3,18 +3,37 @@ import { metricGrid, screenHeader, section, statusPill } from "../components/lay
 import { simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
 import { formatCurrency, formatNumber, formatPercent, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
 
-function adaptationActualValue(state, dietId, lotId, treatment) {
+function feedingActualValue(state, dietId, lotId, treatment) {
   return state.feedingActuals?.[dietId]?.[lotId]?.[treatment];
 }
 
-function buildAdaptationLotRows(state, calculatedDiet, plan) {
+function buildExcelLotRows(state, calculatedDiet, plan) {
   const dietDryMatter = calculatedDiet.totals.dietDryMatterPct;
   const costBsKg = calculatedDiet.totals.costBsKg;
 
   return plan.lotRows.map((lot) => {
+    const expectedByTreatment = Object.fromEntries(
+      lot.treatmentRows.map((treatment) => [treatment.treatment, treatment]),
+    );
+    const manualActuals = Object.fromEntries(
+      [1, 2, 3, 4, 5].map((number) => [
+        number,
+        feedingActualValue(state, plan.dietId, lot.lotId, number),
+      ]),
+    );
+    const realEspeTrato5 =
+      toNumber(expectedByTreatment[1]?.expectedMo) +
+      toNumber(expectedByTreatment[2]?.expectedMo) +
+      toNumber(expectedByTreatment[4]?.expectedMo) +
+      toNumber(expectedByTreatment[5]?.expectedMo) -
+      (toNumber(manualActuals[4] ?? expectedByTreatment[4]?.expectedMo) +
+        toNumber(manualActuals[2] ?? expectedByTreatment[2]?.expectedMo) +
+        toNumber(manualActuals[1] ?? expectedByTreatment[1]?.expectedMo));
     const treatments = lot.treatmentRows.map((treatment) => {
-      const storedActual = adaptationActualValue(state, plan.dietId, lot.lotId, treatment.treatment);
-      const realizedMo = storedActual ?? treatment.expectedMo;
+      const storedActual = manualActuals[treatment.treatment];
+      const fallbackActual =
+        plan.dietId === "TRANSICION" && treatment.treatment === 5 ? realEspeTrato5 : treatment.expectedMo;
+      const realizedMo = storedActual ?? fallbackActual;
       const realizedMs = realizedMo * dietDryMatter;
       const cost = realizedMo * costBsKg;
 
@@ -27,14 +46,6 @@ function buildAdaptationLotRows(state, calculatedDiet, plan) {
     });
 
     const byTreatment = Object.fromEntries(treatments.map((treatment) => [treatment.treatment, treatment]));
-    const realEspeTrato5 =
-      toNumber(byTreatment[1]?.expectedMo) +
-      toNumber(byTreatment[2]?.expectedMo) +
-      toNumber(byTreatment[4]?.expectedMo) +
-      toNumber(byTreatment[5]?.expectedMo) -
-      (toNumber(byTreatment[4]?.realizedMo) +
-        toNumber(byTreatment[2]?.realizedMo) +
-        toNumber(byTreatment[1]?.realizedMo));
     const expectedMo = treatments.reduce((total, treatment) => total + toNumber(treatment.expectedMo), 0);
     const expectedMs = expectedMo * dietDryMatter;
     const realizedMo = treatments.reduce((total, treatment) => total + toNumber(treatment.realizedMo), 0);
@@ -57,8 +68,8 @@ function buildAdaptationLotRows(state, calculatedDiet, plan) {
   });
 }
 
-function adaptationPlanTable(state, calculatedDiet, plan) {
-  const lotRows = buildAdaptationLotRows(state, calculatedDiet, plan);
+function excelPlanTable(state, calculatedDiet, plan) {
+  const lotRows = buildExcelLotRows(state, calculatedDiet, plan);
   const headers = [
     "Piquete",
     "Lote",
@@ -111,7 +122,7 @@ function adaptationPlanTable(state, calculatedDiet, plan) {
               const treatmentCells = [1, 2, 3, 4, 5].flatMap((number) => {
                 const treatment = lot.byTreatment[number] ?? {};
                 const realizedValue =
-                  adaptationActualValue(state, plan.dietId, lot.lotId, number) ?? treatment.expectedMo ?? 0;
+                  feedingActualValue(state, plan.dietId, lot.lotId, number) ?? treatment.realizedMo ?? 0;
                 const cells = [
                   `<td class="calc-cell" data-label="${number}° Prev.">${formatNumber(treatment.expectedMo)}</td>`,
                 ];
@@ -217,7 +228,9 @@ export function feedingScreen(sheet, state, computed) {
   ]);
 
   const planTable =
-    sheet.id === "ADAPTACION" ? adaptationPlanTable(state, calculatedDiet, plan) : defaultPlanTable(plan);
+    sheet.id === "ADAPTACION" || sheet.id === "TRANSICION"
+      ? excelPlanTable(state, calculatedDiet, plan)
+      : defaultPlanTable(plan);
 
   const ingredientRows = calculatedDiet.rows.map((row) => [
     row.name,
