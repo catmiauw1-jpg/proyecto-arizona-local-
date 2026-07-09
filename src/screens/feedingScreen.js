@@ -32,7 +32,9 @@ function buildExcelLotRows(state, calculatedDiet, plan) {
     const treatments = lot.treatmentRows.map((treatment) => {
       const storedActual = manualActuals[treatment.treatment];
       const fallbackActual =
-        plan.dietId === "TRANSICION" && treatment.treatment === 5 ? realEspeTrato5 : treatment.expectedMo;
+        ["TRANSICION", "TERMINACION"].includes(plan.dietId) && treatment.treatment === 5
+          ? realEspeTrato5
+          : treatment.expectedMo;
       const realizedMo = storedActual ?? fallbackActual;
       const realizedMs = realizedMo * dietDryMatter;
       const cost = realizedMo * costBsKg;
@@ -228,7 +230,7 @@ export function feedingScreen(sheet, state, computed) {
   ]);
 
   const planTable =
-    sheet.id === "ADAPTACION" || sheet.id === "TRANSICION"
+    sheet.id === "ADAPTACION" || sheet.id === "TRANSICION" || sheet.id === "TERMINACION"
       ? excelPlanTable(state, calculatedDiet, plan)
       : defaultPlanTable(plan);
 
