@@ -298,20 +298,28 @@ function calculateLegacyConsumptionRows(state, calculatedLots, feedingPlan) {
   });
 }
 
-export function calculateReportRows(calculatedLots, consumptionRows, feedingPlan) {
-  return calculatedLots.filter(hasOperationalLot).map((lot) => {
+function costPerAnimalFromModules(feedingPlan, lotId) {
+  return ["ADAPTACION", "TRANSICION", "TERMINACION"].reduce((total, dietId) => {
+    const planRow = feedingPlan[dietId]?.lotRows.find((row) => row.lotId === lotId);
+    return total + toNumber(planRow?.costPerAnimal);
+  }, 0);
+}
+
+export function calculateReportRows(calculatedLots, consumptionRows, feedingPlan, calculatedDiets) {
+  return calculatedLots.map((lot) => {
     const consumption = consumptionRows.find((row) => row.lotId === lot.id);
-    const planRow = feedingPlan[lot.currentDiet]?.lotRows.find((row) => row.lotId === lot.id);
-    const cmoLot = consumption?.moRealizedManual || consumption?.realizedMo || 0;
-    const cmsLot = consumption?.msRealizedManual || consumption?.realizedMs || 0;
+    const cmoLot = toNumber(consumption?.moRealizedManual);
+    const cmsLot = toNumber(consumption?.msRealizedManual);
     const cmoAnimal = safeDivide(cmoLot, lot.animalCount);
     const cmsAnimal = safeDivide(cmsLot, lot.animalCount);
     const imsPct = safeDivide(cmsAnimal, lot.estimatedWeight);
-    const nutritionalCostAnimal = planRow?.costPerAnimal ?? 0;
+    const nutritionalCostAnimal = costPerAnimalFromModules(feedingPlan, lot.id);
+    const nutritionalCostLot = nutritionalCostAnimal * toNumber(lot.animalCount);
 
     return {
       pen: lot.pen,
       currentDiet: lot.currentDiet,
+      dietName: calculatedDiets[lot.currentDiet]?.title ?? "",
       lotCode: lot.lotCode,
       animalCount: lot.animalCount,
       estimatedWeight: lot.estimatedWeight,
@@ -321,7 +329,9 @@ export function calculateReportRows(calculatedLots, consumptionRows, feedingPlan
       cmsAnimal,
       imsPct,
       nutritionalCostAnimal,
-      nutritionalCostLot: nutritionalCostAnimal * lot.animalCount,
+      nutritionalCostLot,
+      financialAverage: nutritionalCostAnimal,
+      financialTotal: nutritionalCostLot,
     };
   });
 }
@@ -332,7 +342,7 @@ export function calculateState(state) {
   const dietTotals = calculateDietTotals(lots);
   const feedingPlan = calculateFeedingPlan(state, diets, lots);
   const consumptionRows = calculateConsumptionRows(state, lots, diets, feedingPlan);
-  const reportRows = calculateReportRows(lots, calculateLegacyConsumptionRows(state, lots, feedingPlan), feedingPlan);
+  const reportRows = calculateReportRows(lots, consumptionRows, feedingPlan, diets);
 
   return {
     diets,
