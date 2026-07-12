@@ -29,7 +29,7 @@
     sheetCode: "TRANS",
     title: "DIETA TRANSICION",
     consumption: 0,
-    estimatedGmd: 1.5,
+    estimatedGmd: 0,
     treatments: [
       { number: 1, time: "07:00", sharePct: 0.2 },
       { number: 2, time: "10:00", sharePct: 0.2 },
@@ -54,7 +54,7 @@
     sheetCode: "TERM",
     title: "DIETA TERMINACION",
     consumption: 0,
-    estimatedGmd: 1.5,
+    estimatedGmd: 0,
     treatments: [
       { number: 1, time: "07:00", sharePct: 0.2 },
       { number: 2, time: "10:00", sharePct: 0.2 },
