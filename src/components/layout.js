@@ -5,7 +5,9 @@ export function appLayout({ activeSheet, content }) {
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">CA</div>
+          <div class="brand-mark">
+            <img src="./src/assets/logo-arizona.png" alt="Logo Confinamiento Arizona" />
+          </div>
           <div>
             <strong>Confinamiento Arizona</strong>
             <span>Sistema de gestion</span>
