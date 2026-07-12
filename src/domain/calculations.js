@@ -197,14 +197,90 @@ export function calculateFeedingPlan(state, calculatedDiets, calculatedLots) {
   return planByDiet;
 }
 
-export function calculateConsumptionRows(state, calculatedLots, feedingPlan) {
+function calculateLotRealizedFromActuals(state, diet, plan, lotRow) {
+  const dietDryMatter = diet?.totals.dietDryMatterPct ?? 0;
+  const expectedByTreatment = Object.fromEntries(
+    lotRow.treatmentRows.map((treatment) => [treatment.treatment, treatment]),
+  );
+  const manualActuals = Object.fromEntries(
+    [1, 2, 3, 4, 5].map((number) => [
+      number,
+      state.feedingActuals?.[plan.dietId]?.[lotRow.lotId]?.[number],
+    ]),
+  );
+  const realEspeTrato5 =
+    toNumber(expectedByTreatment[1]?.expectedMo) +
+    toNumber(expectedByTreatment[2]?.expectedMo) +
+    toNumber(expectedByTreatment[4]?.expectedMo) +
+    toNumber(expectedByTreatment[5]?.expectedMo) -
+    (toNumber(manualActuals[4] ?? expectedByTreatment[4]?.expectedMo) +
+      toNumber(manualActuals[2] ?? expectedByTreatment[2]?.expectedMo) +
+      toNumber(manualActuals[1] ?? expectedByTreatment[1]?.expectedMo));
+  const realizedMo = lotRow.treatmentRows.reduce((total, treatment) => {
+    const storedActual = manualActuals[treatment.treatment];
+    const fallbackActual =
+      ["TRANSICION", "TERMINACION"].includes(plan.dietId) && treatment.treatment === 5
+        ? realEspeTrato5
+        : treatment.expectedMo;
+
+    return total + toNumber(storedActual ?? fallbackActual);
+  }, 0);
+
+  return {
+    realizedMo,
+    realizedMs: realizedMo * dietDryMatter,
+  };
+}
+
+function consumptionTotalsForLot(state, lot, calculatedDiets, feedingPlan) {
+  return ["ADAPTACION", "TRANSICION", "TERMINACION"].reduce(
+    (totals, dietId) => {
+      const plan = feedingPlan[dietId];
+      const lotRow = plan?.lotRows.find((row) => row.lotId === lot.id);
+      if (!plan || !lotRow) return totals;
+
+      const realized = calculateLotRealizedFromActuals(state, calculatedDiets[dietId], plan, lotRow);
+
+      return {
+        expectedMs: totals.expectedMs + toNumber(lotRow.expectedMs),
+        realizedMs: totals.realizedMs + toNumber(realized.realizedMs),
+        expectedMo: totals.expectedMo + toNumber(lotRow.expectedMo),
+        realizedMo: totals.realizedMo + toNumber(realized.realizedMo),
+      };
+    },
+    { expectedMs: 0, realizedMs: 0, expectedMo: 0, realizedMo: 0 },
+  );
+}
+
+export function calculateConsumptionRows(state, calculatedLots, calculatedDiets, feedingPlan) {
+  return calculatedLots.map((lot) => {
+    const totals = consumptionTotalsForLot(state, lot, calculatedDiets, feedingPlan);
+    const note = state.consumptionNotes[lot.id] ?? {};
+    const msPlannedManual = note.msPlannedManual ?? 0;
+    const msRealizedManual = note.msRealizedManual ?? 0;
+    const moPlannedManual = note.moPlannedManual ?? 0;
+    const moRealizedManual = note.moRealizedManual ?? 0;
+
+    return {
+      lotId: lot.id,
+      pen: lot.pen,
+      currentDiet: lot.currentDiet,
+      expectedMs: totals.expectedMs,
+      realizedMs: totals.realizedMs,
+      expectedMo: totals.expectedMo,
+      realizedMo: totals.realizedMo,
+      msPlannedManual,
+      msRealizedManual,
+      moPlannedManual,
+      moRealizedManual,
+    };
+  });
+}
+
+function calculateLegacyConsumptionRows(state, calculatedLots, feedingPlan) {
   return calculatedLots.filter(hasOperationalLot).map((lot) => {
     const plan = feedingPlan[lot.currentDiet]?.lotRows.find((row) => row.lotId === lot.id);
     const note = state.consumptionNotes[lot.id] ?? {};
-    const msPlannedManual = note.msPlannedManual ?? "";
-    const msRealizedManual = note.msRealizedManual ?? "";
-    const moPlannedManual = note.moPlannedManual ?? "";
-    const moRealizedManual = note.moRealizedManual ?? "";
 
     return {
       lotId: lot.id,
@@ -214,10 +290,10 @@ export function calculateConsumptionRows(state, calculatedLots, feedingPlan) {
       realizedMs: plan?.realizedMs ?? 0,
       expectedMo: plan?.expectedMo ?? 0,
       realizedMo: plan?.realizedMo ?? 0,
-      msPlannedManual,
-      msRealizedManual,
-      moPlannedManual,
-      moRealizedManual,
+      msPlannedManual: note.msPlannedManual ?? "",
+      msRealizedManual: note.msRealizedManual ?? "",
+      moPlannedManual: note.moPlannedManual ?? "",
+      moRealizedManual: note.moRealizedManual ?? "",
     };
   });
 }
@@ -255,8 +331,8 @@ export function calculateState(state) {
   const lots = calculateLots(state, diets);
   const dietTotals = calculateDietTotals(lots);
   const feedingPlan = calculateFeedingPlan(state, diets, lots);
-  const consumptionRows = calculateConsumptionRows(state, lots, feedingPlan);
-  const reportRows = calculateReportRows(lots, consumptionRows, feedingPlan);
+  const consumptionRows = calculateConsumptionRows(state, lots, diets, feedingPlan);
+  const reportRows = calculateReportRows(lots, calculateLegacyConsumptionRows(state, lots, feedingPlan), feedingPlan);
 
   return {
     diets,

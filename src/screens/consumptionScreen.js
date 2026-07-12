@@ -51,16 +51,16 @@ export function consumptionScreen(computed) {
 
   const table = simpleTable(
     [
-      "Corral",
-      "Dieta actual",
-      "Previsto MS",
-      "Realizado MS",
-      "Previsto MO",
-      "Realizado MO",
-      "MS previsto",
-      "MS realizado",
-      "MO previsto",
-      "MO realizado",
+      "CORRAL",
+      "DIETA ACTUAL",
+      "PREVISTO MS",
+      "REALIZADO MS",
+      "PREVISTO MO",
+      "REALIZADO MO",
+      "MS / PREVISTO",
+      "MS / REALIZADO",
+      "MO / PREVISTO",
+      "MO / REALIZADO",
     ],
     rows,
   );
