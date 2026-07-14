@@ -1,6 +1,9 @@
 ﻿import { SHEETS } from "../domain/model.js?v=20260621-stage1-clean-all";
 
-export function appLayout({ activeSheet, content }) {
+export function appLayout({ activeSheet, content, sessionContext = null }) {
+  const userEmail = sessionContext?.user?.email ?? "";
+  const clientName = sessionContext?.client?.name ?? "";
+
   return `
     <div class="app-shell">
       <aside class="sidebar">
@@ -22,6 +25,17 @@ export function appLayout({ activeSheet, content }) {
             `,
           ).join("")}
         </nav>
+        ${
+          sessionContext
+            ? `
+              <div class="session-card">
+                <span>${clientName}</span>
+                <strong>${userEmail}</strong>
+                <button type="button" data-action="authSignOut">Cerrar sesion</button>
+              </div>
+            `
+            : ""
+        }
       </aside>
       <main class="workspace">
         ${content}

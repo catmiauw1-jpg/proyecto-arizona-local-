@@ -6,6 +6,8 @@ import { feedingScreen } from "./screens/feedingScreen.js?v=20260621-stage1-clea
 import { incomeScreen } from "./screens/incomeScreen.js?v=20260621-stage1-clean-all";
 import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260621-stage1-clean-all";
 import { reportScreen } from "./screens/reportScreen.js?v=20260621-stage1-clean-all";
+import { loadingScreen, loginScreen } from "./screens/loginScreen.js?v=20260621-stage1-clean-all";
+import { loadAuthorizedSession, signInWithPassword, signOut } from "./services/authService.js?v=20260621-stage1-clean-all";
 import {
   applyConsumptionFromCalculated,
   getComputedState,
@@ -21,6 +23,14 @@ import {
 } from "./state/store.js?v=20260621-stage1-clean-all";
 
 const app = document.querySelector("#app");
+let authState = {
+  status: "loading",
+  user: null,
+  profile: null,
+  client: null,
+  error: "",
+  loading: false,
+};
 
 function currentSheetId() {
   const hash = window.location.hash.replace(/^#\/?/, "");
@@ -49,6 +59,16 @@ function routeContent(sheet, state, computed) {
 }
 
 function render() {
+  if (authState.status === "loading") {
+    app.innerHTML = loadingScreen();
+    return;
+  }
+
+  if (authState.status !== "authorized") {
+    app.innerHTML = loginScreen(authState);
+    return;
+  }
+
   const sheet = findSheet();
   const state = getState();
   const computed = getComputedState();
@@ -56,6 +76,7 @@ function render() {
   app.innerHTML = appLayout({
     activeSheet: sheet.id,
     content: routeContent(sheet, state, computed),
+    sessionContext: authState,
   });
 }
 
@@ -112,18 +133,76 @@ function handleKeyDown(event) {
 }
 function handleClick(event) {
   const action = event.target?.closest("[data-action]")?.dataset?.action;
-  if (action !== "applyConsumptionFromCalculated") return;
 
-  applyConsumptionFromCalculated(getComputedState().consumptionRows);
+  if (action === "applyConsumptionFromCalculated") {
+    applyConsumptionFromCalculated(getComputedState().consumptionRows);
+  }
+
+  if (action === "authSignOut") {
+    authState = { ...authState, status: "loading" };
+    render();
+    signOut()
+      .catch(() => {})
+      .finally(() => {
+        authState = { status: "signedOut", user: null, profile: null, client: null, error: "" };
+        render();
+      });
+  }
+}
+
+async function handleLoginSubmit(event) {
+  const form = event.target?.closest?.("[data-auth-form='login']");
+  if (!form) return;
+
+  event.preventDefault();
+  const formData = new FormData(form);
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  authState = { ...authState, loading: true, error: "" };
+  render();
+
+  try {
+    authState = await signInWithPassword(email, password);
+  } catch (error) {
+    authState = {
+      status: "signedOut",
+      user: null,
+      profile: null,
+      client: null,
+      error: error.message || "No se pudo iniciar sesion.",
+      loading: false,
+    };
+  }
+
+  render();
+}
+
+async function initializeAuth() {
+  try {
+    authState = await loadAuthorizedSession();
+  } catch (error) {
+    authState = {
+      status: "signedOut",
+      user: null,
+      profile: null,
+      client: null,
+      error: error.message || "No se pudo validar la sesion.",
+    };
+  }
+
+  render();
 }
 
 window.addEventListener("hashchange", render);
 app.addEventListener("change", handleCommit);
 app.addEventListener("keydown", handleKeyDown);
 app.addEventListener("click", handleClick);
+app.addEventListener("submit", handleLoginSubmit);
 subscribe(render);
 
 render();
+initializeAuth();
 
 
 
