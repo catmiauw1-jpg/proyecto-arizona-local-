@@ -12,6 +12,33 @@ export function getState() {
   return state;
 }
 
+export function setState(nextState) {
+  state = clone({
+    ...createEmptyPeriodState(),
+    ...(nextState ?? {}),
+    config: {
+      ...createEmptyPeriodState().config,
+      ...(nextState?.config ?? {}),
+    },
+    diets: nextState?.diets ?? createEmptyPeriodState().diets,
+    lots: nextState?.lots ?? createEmptyPeriodState().lots,
+    consumptionNotes: nextState?.consumptionNotes ?? {},
+    feedingActuals: nextState?.feedingActuals ?? {},
+  });
+  emit();
+}
+
+export function resetState(overrides = {}) {
+  setState({
+    ...createEmptyPeriodState(),
+    ...overrides,
+    config: {
+      ...createEmptyPeriodState().config,
+      ...(overrides.config ?? {}),
+    },
+  });
+}
+
 export function getComputedState() {
   return calculateState(state);
 }

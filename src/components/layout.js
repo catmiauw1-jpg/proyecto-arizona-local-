@@ -1,6 +1,52 @@
 ﻿import { SHEETS } from "../domain/model.js?v=20260621-stage1-clean-all";
 
-export function appLayout({ activeSheet, content, sessionContext = null }) {
+function formatDateTime(value) {
+  if (!value) return "Sin guardar";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sin guardar";
+  return new Intl.DateTimeFormat("es-BO", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function dayStatusBar(workDayContext) {
+  if (!workDayContext?.workDay) return "";
+
+  const statusLabels = {
+    ready: "Sin guardar",
+    saving: "Guardando...",
+    saved: "Guardado",
+    error: "Error al guardar",
+  };
+  const status = statusLabels[workDayContext.saveStatus] ?? "Sin guardar";
+  const disabled = workDayContext.saveStatus === "saving" ? "disabled" : "";
+
+  return `
+    <div class="day-status-bar">
+      <div>
+        <span>Día activo</span>
+        <strong>${workDayContext.period?.name ?? "Periodo activo"}</strong>
+      </div>
+      <div>
+        <span>Fecha de trabajo</span>
+        <strong>${workDayContext.workDay.work_date ?? ""}</strong>
+      </div>
+      <div>
+        <span>Último guardado</span>
+        <strong>${formatDateTime(workDayContext.lastSavedAt)}</strong>
+      </div>
+      <div>
+        <span>Estado</span>
+        <strong>${status}</strong>
+      </div>
+      <button type="button" data-action="saveWorkDay" ${disabled}>Guardar día</button>
+      ${workDayContext.message ? `<p>${workDayContext.message}</p>` : ""}
+    </div>
+  `;
+}
+
+export function appLayout({ activeSheet, content, sessionContext = null, workDayContext = null }) {
   const userEmail = sessionContext?.user?.email ?? "";
   const clientName = sessionContext?.client?.name ?? "";
 
@@ -38,6 +84,7 @@ export function appLayout({ activeSheet, content, sessionContext = null }) {
         }
       </aside>
       <main class="workspace">
+        ${dayStatusBar(workDayContext)}
         ${content}
       </main>
     </div>

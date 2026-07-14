@@ -162,6 +162,56 @@ button {
   padding: 24px;
 }
 
+.day-status-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.day-status-bar div {
+  display: grid;
+  gap: 3px;
+}
+
+.day-status-bar span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.day-status-bar strong {
+  font-size: 13px;
+}
+
+.day-status-bar button {
+  min-height: 36px;
+  border: 1px solid #bad2c7;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--green);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.day-status-bar button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.day-status-bar p {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .login-shell {
   min-height: 100vh;
   display: grid;
@@ -746,6 +796,14 @@ th:last-child {
     padding: 16px;
   }
 
+  .day-status-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .day-status-bar button {
+    grid-column: 1 / -1;
+  }
+
   .screen-header {
     display: block;
   }
@@ -759,6 +817,10 @@ th:last-child {
 }
 
 @media (max-width: 700px) {
+  .day-status-bar {
+    grid-template-columns: 1fr;
+  }
+
   .animal-consumption-table .table-wrap {
     overflow: visible;
     border: 0;
