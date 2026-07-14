@@ -66,18 +66,8 @@ export function calculateDiet(diet) {
   totals.costBsKg = totals.costBsTon / 1000;
   totals.status = isCompletePercent(totalInclusionMsPct) ? "Correcto" : "Incorrecto";
   totals.treatmentSharePct = sum(diet.treatments, (treatment) => treatment.sharePct);
-  totals.treatmentAb2 =
-    diet.id === "ADAPTACION"
-      ? toNumber(diet.treatments[0]?.sharePct) +
-        toNumber(diet.treatments[1]?.sharePct) +
-        toNumber(diet.treatments[3]?.sharePct) +
-        toNumber(diet.treatments[4]?.sharePct)
-      : totals.treatmentSharePct;
-  totals.treatmentAb3Basis =
-    toNumber(diet.treatments[0]?.sharePct) +
-    toNumber(diet.treatments[1]?.sharePct) +
-    toNumber(diet.treatments[3]?.sharePct) +
-    toNumber(diet.treatments[4]?.sharePct);
+  totals.treatmentAb2 = totals.treatmentSharePct;
+  totals.treatmentAb3Basis = totals.treatmentSharePct;
   totals.treatmentStatus = isCompletePercent(totals.treatmentAb3Basis) ? "Correcto" : "Incorrecto";
 
   return { ...diet, rows, totals };

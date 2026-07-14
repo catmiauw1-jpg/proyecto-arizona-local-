@@ -170,6 +170,41 @@ function excelPlanTable(state, calculatedDiet, plan) {
   `;
 }
 
+function treatmentIngredientLoads(calculatedDiet, dietTotalMo, treatment) {
+  return calculatedDiet.rows.map((ingredient) => ({
+    name: ingredient.name,
+    kg: toNumber(dietTotalMo) * toNumber(ingredient.normalizedMoPct) * toNumber(treatment.sharePct),
+  }));
+}
+
+function treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment) {
+  const rows = treatmentIngredientLoads(calculatedDiet, dietTotalMo, treatment);
+
+  return `
+    <div class="treatment-loads">
+      <span>Kg por insumo</span>
+      <table>
+        <tbody>
+          ${rows
+            .map(
+              (row) => `
+                <tr>
+                  <td>${row.name}</td>
+                  <td>${formatNumber(row.kg)}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+          <tr class="total-row">
+            <td>Total</td>
+            <td>${formatNumber(rows.reduce((total, row) => total + toNumber(row.kg), 0))}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function defaultPlanTable(plan) {
   const rows = plan.lotRows.flatMap((lot) =>
     lot.treatmentRows.map((treatment) => [
@@ -193,6 +228,7 @@ export function feedingScreen(sheet, state, computed) {
   const diet = state.diets[sheet.dietId];
   const calculatedDiet = computed.diets[sheet.dietId];
   const plan = computed.feedingPlan[sheet.dietId];
+  const dietTotalMo = computed.dietTotals[sheet.dietId]?.totalFeedMo ?? 0;
 
   const header = screenHeader({
     eyebrow: `Modulo ${sheet.id}`,
@@ -215,6 +251,7 @@ export function feedingScreen(sheet, state, computed) {
                 <span>Porcentaje</span>
                 <input type="text" inputmode="decimal" step="0.001" value="${treatment.sharePct}" data-action="updateTreatment:${diet.id}:${treatment.number}:sharePct:percent" />
               </label>
+              ${treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment)}
             </div>
           `,
         )
