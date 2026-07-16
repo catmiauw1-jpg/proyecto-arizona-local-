@@ -8,6 +8,7 @@
   { id: "TERMINACION", label: "TERMINACION", kind: "feeding", dietId: "TERMINACION" },
   { id: "ANOTACION DE CONSUMO", label: "ANOTACION DE CONSUMO", kind: "consumption" },
   { id: "REGISTRO", label: "REGISTRO", kind: "report" },
+  { id: "HISTORIAL", label: "HISTORIAL", kind: "history" },
 ];
 
 export const DIET_SHEETS = {

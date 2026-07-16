@@ -35,3 +35,34 @@ export async function saveWorkDaySnapshot({ workDayId, inputState, computedState
 
   return data;
 }
+
+export async function saveRegistroHistorySnapshot({ workDayId, inputState, computedState, summary }) {
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase.rpc("save_registro_history_snapshot", {
+    p_work_day_id: workDayId,
+    p_input_state: inputState,
+    p_computed_state: computedState,
+    p_summary: summary,
+  });
+
+  if (error) {
+    throw new Error(error.message || "No se pudo guardar el registro historico.");
+  }
+
+  return data;
+}
+
+export async function listRegistroHistorySnapshots() {
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase
+    .from("work_day_snapshots")
+    .select("id, work_day_id, snapshot_type, saved_by, saved_at, summary, computed_state")
+    .eq("snapshot_type", "registro_history")
+    .order("saved_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || "No se pudo cargar el historial.");
+  }
+
+  return data ?? [];
+}

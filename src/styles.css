@@ -164,7 +164,7 @@ button {
 
 .day-status-bar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto auto;
   gap: 10px;
   align-items: center;
   margin-bottom: 18px;
@@ -199,6 +199,26 @@ button {
   background: var(--green);
   color: #ffffff;
   font-weight: 800;
+}
+
+.secondary-action {
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #ffffff;
+  color: var(--green-dark);
+  font-weight: 800;
+}
+
+.secondary-action:hover {
+  background: var(--panel-soft);
+}
+
+.day-status-bar .secondary-action {
+  border-color: var(--line-strong);
+  background: #ffffff;
+  color: var(--green-dark);
 }
 
 .day-status-bar button:disabled {
@@ -352,6 +372,29 @@ h2 {
 
 .primary-action:hover {
   background: var(--green-dark);
+}
+
+.history-banner,
+.history-message {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid #bad2c7;
+  border-radius: 8px;
+  background: #e7f2ed;
+  color: var(--green-dark);
+}
+
+.history-banner span,
+.history-message {
+  font-size: 13px;
+}
+
+.history-filter {
+  margin-top: 0;
 }
 
 .section {
@@ -800,7 +843,8 @@ th:last-child {
     grid-template-columns: 1fr 1fr;
   }
 
-  .day-status-bar button {
+  .day-status-bar button,
+  .day-status-bar .secondary-action {
     grid-column: 1 / -1;
   }
 

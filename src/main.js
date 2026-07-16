@@ -6,9 +6,15 @@ import { feedingScreen } from "./screens/feedingScreen.js?v=20260621-stage1-clea
 import { incomeScreen } from "./screens/incomeScreen.js?v=20260621-stage1-clean-all";
 import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260621-stage1-clean-all";
 import { reportScreen } from "./screens/reportScreen.js?v=20260621-stage1-clean-all";
+import { historyScreen } from "./screens/historyScreen.js?v=20260621-stage1-clean-all";
 import { loadingScreen, loginScreen } from "./screens/loginScreen.js?v=20260621-stage1-clean-all";
 import { loadAuthorizedSession, signInWithPassword, signOut } from "./services/authService.js?v=20260621-stage1-clean-all";
-import { loadActiveWorkDay, saveWorkDaySnapshot } from "./services/workDayService.js?v=20260621-stage1-clean-all";
+import {
+  listRegistroHistorySnapshots,
+  loadActiveWorkDay,
+  saveRegistroHistorySnapshot,
+  saveWorkDaySnapshot,
+} from "./services/workDayService.js?v=20260621-stage1-clean-all";
 import {
   applyConsumptionFromCalculated,
   getComputedState,
@@ -37,11 +43,31 @@ let authState = {
 let workDayState = {
   status: "idle",
   saveStatus: "ready",
+  historyStatus: "ready",
   period: null,
   workDay: null,
+  workDate: null,
   lastSavedAt: null,
   message: "",
 };
+let historyState = {
+  status: "idle",
+  snapshots: [],
+  selectedSnapshot: null,
+  filters: {
+    date: "",
+    pen: "",
+    lot: "",
+    diet: "",
+  },
+  message: "",
+};
+
+function todayIsoDate() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
 
 function currentSheetId() {
   const hash = window.location.hash.replace(/^#\/?/, "");
@@ -66,6 +92,7 @@ function routeContent(sheet, state, computed) {
   if (sheet.kind === "feeding") return feedingScreen(sheet, state, computed);
   if (sheet.kind === "consumption") return consumptionScreen(computed);
   if (sheet.kind === "report") return reportScreen(computed);
+  if (sheet.kind === "history") return historyScreen(historyState);
   return "";
 }
 
@@ -104,19 +131,64 @@ function buildDaySummary(state, computed) {
   };
 }
 
+function compactReportRows(reportRows) {
+  return reportRows.map((row) => ({
+    pen: row.pen,
+    currentDiet: row.currentDiet,
+    dietName: row.dietName,
+    lotCode: row.lotCode,
+    animalCount: Number(row.animalCount || 0),
+    estimatedWeight: Number(row.estimatedWeight || 0),
+    cmoLot: Number(row.cmoLot || 0),
+    cmoAnimal: Number(row.cmoAnimal || 0),
+    cmsLot: Number(row.cmsLot || 0),
+    cmsAnimal: Number(row.cmsAnimal || 0),
+    imsPct: Number(row.imsPct || 0),
+    nutritionalCostAnimal: Number(row.nutritionalCostAnimal || 0),
+    nutritionalCostLot: Number(row.nutritionalCostLot || 0),
+    financialAverage: Number(row.financialAverage || 0),
+    financialTotal: Number(row.financialTotal || 0),
+  }));
+}
+
+function buildRegistroHistorySummary(state, computed) {
+  const reportRows = compactReportRows(computed.reportRows);
+  const activeRows = reportRows.filter(
+    (row) => row.lotCode || row.animalCount > 0 || row.currentDiet,
+  );
+
+  return {
+    clientName: state.config.clientName,
+    workDate: state.config.workDate,
+    activePens: activeRows.length,
+    totalAnimals: reportRows.reduce((total, row) => total + row.animalCount, 0),
+    totalCmsLot: reportRows.reduce((total, row) => total + row.cmsLot, 0),
+    totalCmoLot: reportRows.reduce((total, row) => total + row.cmoLot, 0),
+    totalNutritionalCost: reportRows.reduce((total, row) => total + row.nutritionalCostLot, 0),
+    totalFinancial: reportRows.reduce((total, row) => total + row.financialTotal, 0),
+    reportRows,
+  };
+}
+
 function cleanStateFromWorkDay(period, workDay) {
   resetState({
     config: {
       clientName: authState.client?.name ?? "Confinamiento Arizona",
       startDate: period?.start_date ?? "",
-      workDate: workDay?.work_date ?? "",
+      workDate: todayIsoDate(),
     },
   });
 }
 
 function applyLoadedWorkDay({ period, workDay, snapshot }) {
   if (snapshot?.input_state) {
-    setState(snapshot.input_state);
+    setState({
+      ...snapshot.input_state,
+      config: {
+        ...(snapshot.input_state.config ?? {}),
+        workDate: todayIsoDate(),
+      },
+    });
   } else {
     cleanStateFromWorkDay(period, workDay);
   }
@@ -124,8 +196,10 @@ function applyLoadedWorkDay({ period, workDay, snapshot }) {
   workDayState = {
     status: "ready",
     saveStatus: snapshot ? "saved" : "ready",
+    historyStatus: "ready",
     period,
     workDay,
+    workDate: getState().config.workDate,
     lastSavedAt: snapshot?.saved_at ?? workDay?.last_saved_at ?? null,
     message: snapshot ? "Día recuperado correctamente." : "Día activo iniciado sin datos guardados.",
   };
@@ -142,8 +216,10 @@ async function initializeWorkDay() {
     workDayState = {
       status: "error",
       saveStatus: "error",
+      historyStatus: "ready",
       period: null,
       workDay: null,
+      workDate: null,
       lastSavedAt: null,
       message: error.message || "No se pudo cargar el día activo.",
     };
@@ -174,6 +250,10 @@ function render() {
   }
 
   const sheet = findSheet();
+  if (sheet.kind === "history" && historyState.status === "idle") {
+    void handleLoadHistory();
+  }
+
   const state = getState();
   const computed = getComputedState();
 
@@ -181,7 +261,10 @@ function render() {
     activeSheet: sheet.id,
     content: routeContent(sheet, state, computed),
     sessionContext: authState,
-    workDayContext: workDayState,
+    workDayContext: {
+      ...workDayState,
+      isHistoryView: sheet.kind === "history" && Boolean(historyState.selectedSnapshot),
+    },
   });
 }
 
@@ -255,9 +338,48 @@ function handleClick(event) {
     void handleSaveWorkDay();
   }
 
+  if (action === "saveRegistroHistory") {
+    void handleSaveRegistroHistory();
+  }
+
+  if (action === "loadHistory") {
+    void handleLoadHistory();
+  }
+
+  if (action?.startsWith("openHistorySnapshot:")) {
+    const [, snapshotId] = action.split(":");
+    historyState = {
+      ...historyState,
+      selectedSnapshot: historyState.snapshots.find((snapshot) => snapshot.id === snapshotId) ?? null,
+    };
+    render();
+  }
+
+  if (action === "closeHistorySnapshot") {
+    historyState = { ...historyState, selectedSnapshot: null };
+    window.location.hash = "#/Ingreso";
+    render();
+  }
+
   if (action === "authSignOut") {
     authState = { ...authState, status: "loading" };
-    workDayState = { status: "idle", saveStatus: "ready", period: null, workDay: null, lastSavedAt: null, message: "" };
+    workDayState = {
+      status: "idle",
+      saveStatus: "ready",
+      historyStatus: "ready",
+      period: null,
+      workDay: null,
+      workDate: null,
+      lastSavedAt: null,
+      message: "",
+    };
+    historyState = {
+      status: "idle",
+      snapshots: [],
+      selectedSnapshot: null,
+      filters: { date: "", pen: "", lot: "", diet: "" },
+      message: "",
+    };
     render();
     signOut()
       .catch(() => {})
@@ -267,6 +389,20 @@ function handleClick(event) {
         render();
       });
   }
+}
+
+function handleHistoryFilter(event) {
+  const key = event.target?.dataset?.historyFilter;
+  if (!key) return;
+
+  historyState = {
+    ...historyState,
+    filters: {
+      ...historyState.filters,
+      [key]: event.target.value,
+    },
+  };
+  render();
 }
 
 async function handleSaveWorkDay() {
@@ -311,6 +447,79 @@ async function handleSaveWorkDay() {
       ...workDayState,
       saveStatus: "error",
       message: error.message || "Error al guardar.",
+    };
+  }
+
+  render();
+}
+
+async function handleSaveRegistroHistory() {
+  if (workDayState.historyStatus === "saving") return;
+  if (!workDayState.workDay?.id) {
+    workDayState = {
+      ...workDayState,
+      historyStatus: "error",
+      message: "No hay un día activo para guardar en historial.",
+    };
+    render();
+    return;
+  }
+
+  workDayState = { ...workDayState, historyStatus: "saving", message: "" };
+  render();
+
+  try {
+    const inputState = clone(getState());
+    const computedState = clone(getComputedState());
+    const summary = buildRegistroHistorySummary(inputState, computedState);
+    const result = await saveRegistroHistorySnapshot({
+      workDayId: workDayState.workDay.id,
+      inputState,
+      computedState,
+      summary,
+    });
+
+    workDayState = {
+      ...workDayState,
+      historyStatus: "saved",
+      message: `Registro histórico guardado correctamente (${result?.saved_at ?? ""}).`,
+    };
+    historyState = {
+      ...historyState,
+      status: "idle",
+      selectedSnapshot: null,
+    };
+  } catch (error) {
+    workDayState = {
+      ...workDayState,
+      historyStatus: "error",
+      message: error.message || "Error al guardar el registro histórico.",
+    };
+  }
+
+  render();
+}
+
+async function handleLoadHistory() {
+  if (historyState.status === "loading") return;
+
+  historyState = { ...historyState, status: "loading", message: "" };
+  render();
+
+  try {
+    const snapshots = await listRegistroHistorySnapshots();
+    historyState = {
+      ...historyState,
+      status: "ready",
+      snapshots,
+      message: snapshots.length ? "" : "Todavía no hay días guardados en historial.",
+    };
+  } catch (error) {
+    historyState = {
+      ...historyState,
+      status: "error",
+      snapshots: [],
+      message: error.message || "No se pudo cargar el historial.",
     };
   }
 
@@ -371,6 +580,7 @@ async function initializeAuth() {
 
 window.addEventListener("hashchange", render);
 app.addEventListener("change", handleCommit);
+app.addEventListener("input", handleHistoryFilter);
 app.addEventListener("keydown", handleKeyDown);
 app.addEventListener("click", handleClick);
 app.addEventListener("submit", handleLoginSubmit);

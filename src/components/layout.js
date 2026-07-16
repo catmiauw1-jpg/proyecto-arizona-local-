@@ -21,6 +21,15 @@ function dayStatusBar(workDayContext) {
   };
   const status = statusLabels[workDayContext.saveStatus] ?? "Sin guardar";
   const disabled = workDayContext.saveStatus === "saving" ? "disabled" : "";
+  const historyDisabled = workDayContext.historyStatus === "saving" ? "disabled" : "";
+  const actions = workDayContext.isHistoryView
+    ? '<strong>Solo consulta</strong>'
+    : `
+      <button type="button" data-action="saveWorkDay" ${disabled}>Guardar día</button>
+      <button type="button" class="secondary-action" data-action="saveRegistroHistory" ${historyDisabled}>
+        Guardar día en historial
+      </button>
+    `;
 
   return `
     <div class="day-status-bar">
@@ -30,7 +39,7 @@ function dayStatusBar(workDayContext) {
       </div>
       <div>
         <span>Fecha de trabajo</span>
-        <strong>${workDayContext.workDay.work_date ?? ""}</strong>
+        <strong>${workDayContext.workDate ?? workDayContext.workDay.work_date ?? ""}</strong>
       </div>
       <div>
         <span>Último guardado</span>
@@ -40,7 +49,7 @@ function dayStatusBar(workDayContext) {
         <span>Estado</span>
         <strong>${status}</strong>
       </div>
-      <button type="button" data-action="saveWorkDay" ${disabled}>Guardar día</button>
+      ${actions}
       ${workDayContext.message ? `<p>${workDayContext.message}</p>` : ""}
     </div>
   `;
