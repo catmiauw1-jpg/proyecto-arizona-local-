@@ -2,10 +2,12 @@
 import { formatCell, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
-export function valueInput({ value, type = "text", onInput, options = [] }) {
+export function valueInput({ value, type = "text", onInput, options = [], disabled = false }) {
+  const disabledAttributes = disabled ? 'disabled aria-disabled="true"' : "";
+
   if (type === "select") {
     return `
-      <select data-action="${escapeHtml(onInput)}">
+      <select data-action="${escapeHtml(onInput)}" ${disabledAttributes}>
         ${options
           .map(
             (option) =>
@@ -28,6 +30,7 @@ export function valueInput({ value, type = "text", onInput, options = [] }) {
       ${isNumeric ? 'inputmode="decimal"' : ""}
       value="${escapeHtml(shownValue ?? "")}"
       data-action="${escapeHtml(onInput)}"
+      ${disabledAttributes}
     />
   `;
 }

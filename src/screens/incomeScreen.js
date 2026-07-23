@@ -1,9 +1,19 @@
 ﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-all";
 import { formatCell, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-all";
-import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-d";
+import { dataTable, simpleTable } from "../components/table.js?v=20260723-phase-d";
 
-export function incomeScreen(state, computed) {
+import {
+  canEditIncomeConfig,
+  canEditLotField,
+  canLockInitialData,
+  canUnlockInitialData,
+} from "../domain/permissions.js?v=20260723-phase-d";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
+import { valueInput } from "../components/fields.js?v=20260723-phase-d";
+
+export function incomeScreen(state, computed, permissionContext = {}) {
+  const { role, initialDataLocked = false } = permissionContext;
   const columns = LOT_COLUMNS.map((column) =>
     column.key === "currentDiet" ? { ...column, options: ["", ...DIET_LABELS] } : column,
   );
@@ -16,21 +26,50 @@ export function incomeScreen(state, computed) {
     eyebrow: "Modulo Ingreso",
     title: "Ingreso de lotes y calculo inicial",
     description: "Edita los datos de lotes y revisa los resultados iniciales.",
+    actions: canLockInitialData(role, initialDataLocked)
+      ? '<button class="primary-action" type="button" data-action="lockInitialData">Guardar y bloquear datos iniciales</button>'
+      : canUnlockInitialData(role, initialDataLocked)
+        ? '<button class="secondary-action" type="button" data-action="unlockInitialData">Desbloquear datos iniciales</button>'
+        : "",
   });
 
+  const lockStatus = `
+    <div class="lock-banner ${initialDataLocked ? "is-locked" : "is-editable"}">
+      <strong>${initialDataLocked ? "Datos iniciales bloqueados" : "Datos iniciales editables"}</strong>
+      <span>
+        ${
+          initialDataLocked
+            ? "Los datos de ingreso requieren desbloqueo administrativo para modificarse."
+            : "Los datos de ingreso pueden registrarse antes del bloqueo."
+        }
+      </span>
+    </div>
+  `;
+
+  const configEditable = canEditIncomeConfig(role);
   const config = `
     <div class="form-grid">
       <label>
         <span>Cliente</span>
-        <input type="text" value="${state.config.clientName}" data-action="updateConfig:clientName:text" />
+        ${valueInput({
+          value: state.config.clientName,
+          type: "text",
+          onInput: "updateConfig:clientName:text",
+          disabled: !configEditable,
+        })}
       </label>
       <label>
         <span>Fecha inicial</span>
-        <input type="date" value="${state.config.startDate}" data-action="updateConfig:startDate:date" />
+        ${valueInput({
+          value: state.config.startDate,
+          type: "date",
+          onInput: "updateConfig:startDate:date",
+          disabled: !configEditable,
+        })}
       </label>
       <label>
         <span>Fecha de trabajo</span>
-        <span class="locked-field">${state.config.workDate}</span>
+        <span class="locked-field">${escapeHtml(state.config.workDate)}</span>
       </label>
     </div>
   `;
@@ -47,6 +86,7 @@ export function incomeScreen(state, computed) {
     rows: computed.lots,
     rowId: (row) => row.id,
     actionPrefix: "updateLot",
+    isEditable: ({ column }) => canEditLotField(role, initialDataLocked, column.key),
   });
 
   const animalConsumptionColumns = [
@@ -66,6 +106,7 @@ export function incomeScreen(state, computed) {
         rowId: (row) => row.id,
         actionPrefix: "updateLot",
         compact: true,
+        isEditable: ({ column }) => canEditLotField(role, initialDataLocked, column.key),
       })}
     </div>
   `;
@@ -83,6 +124,7 @@ export function incomeScreen(state, computed) {
 
   return `
     ${header}
+    ${lockStatus}
     ${section("Datos generales", config)}
     ${metrics}
     ${section("Lotes / piquetes", lotsTable)}

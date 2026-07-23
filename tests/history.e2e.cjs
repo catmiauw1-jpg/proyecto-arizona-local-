@@ -169,6 +169,9 @@ export function createClient() {
         };
       }
       if (name === "save_work_day_snapshot") {
+        if (localStorage.getItem("__arizona_force_save_failure__") === "1") {
+          return { data: null, error: { message: "Fallo simulado al guardar." } };
+        }
         const result = nextSnapshot(database, "manual_save", params);
         return {
           data: {
@@ -303,6 +306,7 @@ test("validates append-only history, read-only consultation and reload locally",
 
   await page.goto(origin, { waitUntil: "domcontentloaded" });
   await page.getByText("Ingreso de lotes y calculo inicial").waitFor();
+  await page.locator('[data-action="setLocalRole"]').selectOption("admin_arizona");
 
   const workDateField = page
     .getByText("Fecha de trabajo", { exact: true })
@@ -361,7 +365,14 @@ test("validates append-only history, read-only consultation and reload locally",
   await page.getByText("Vista histórica", { exact: false }).waitFor();
   assert.match(await page.locator("main.workspace").innerText(), /LOTE-B/);
   assert.equal(await page.getByRole("button", { name: "INJECTED", exact: true }).count(), 0);
-  assert.equal(await page.locator("main.workspace input, main.workspace select, main.workspace textarea").count(), 0);
+  assert.equal(
+    await page
+      .locator(
+        "main.workspace input, main.workspace select:not([data-action='setLocalRole']), main.workspace textarea",
+      )
+      .count(),
+    0,
+  );
   assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 0);
 
   await page.getByRole("button", { name: "Volver al dia actual", exact: true }).click();
@@ -391,6 +402,191 @@ test("validates append-only history, read-only consultation and reload locally",
     await page.getByText("Fecha de trabajo", { exact: true }).locator("..").locator(".locked-field").textContent(),
     activeWorkDate,
   );
+
+  const visibleText = await page.locator("body").innerText();
+  assert.doesNotMatch(visibleText, /\b(?:NaN|Infinity|undefined)\b/);
+  assert.deepEqual(unexpectedRequests, []);
+  assert.deepEqual(consoleErrors, []);
+  assert.deepEqual(pageErrors, []);
+});
+
+test("validates local roles, persistent locks and protected handlers", { timeout: 60_000 }, async (t) => {
+  const executablePath = findBrowserExecutable();
+  assert.ok(executablePath, "Se requiere Microsoft Edge o Google Chrome para la prueba local.");
+
+  const server = createLocalServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const origin = `http://127.0.0.1:${address.port}`;
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const unexpectedRequests = [];
+  const consoleErrors = [];
+  const pageErrors = [];
+
+  t.after(async () => {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  await context.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (url === "https://esm.sh/@supabase/supabase-js@2.53.0") {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/javascript; charset=utf-8",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: supabaseMockModule,
+      });
+      return;
+    }
+    if (url.startsWith(origin)) {
+      await route.continue();
+      return;
+    }
+    unexpectedRequests.push(url);
+    await route.abort();
+  });
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto(origin, { waitUntil: "domcontentloaded" });
+  await page.getByText("Ingreso de lotes y calculo inicial").waitFor();
+
+  const roleSelector = page.locator('[data-action="setLocalRole"]');
+  assert.equal(await roleSelector.inputValue(), "operator");
+  assert.equal(await page.getByText("Herramienta local de prueba", { exact: true }).count(), 1);
+  assert.equal(await page.locator('[data-action="updateConfig:clientName:text"]').isDisabled(), true);
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), false);
+  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+
+  await roleSelector.selectOption("admin_arizona");
+  await updateField(page, "updateLot:lot-1:lotCode:text", "LOTE-ROLES");
+  await updateField(page, "updateLot:lot-1:animalCount:number", "12");
+  await page.locator('[data-action="updateLot:lot-1:currentDiet:select"]').selectOption("ADAPTACION");
+  await page.evaluate(() => localStorage.setItem("__arizona_force_save_failure__", "1"));
+  await page.locator('[data-action="lockInitialData"]').click();
+  await page.getByText("Fallo simulado al guardar.").waitFor();
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), false);
+  await page.evaluate(() => localStorage.removeItem("__arizona_force_save_failure__"));
+  await page.locator('[data-action="lockInitialData"]').click();
+  await page.getByText("Datos iniciales bloqueados y guardados.").waitFor();
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), true);
+
+  let database = await readMockDatabase(page);
+  let currentSnapshot = database.snapshots.find(
+    (snapshot) => snapshot.id === database.workDay.last_snapshot_id,
+  );
+  assert.equal(currentSnapshot.input_state.accessControl.initialDataLocked, true);
+
+  await roleSelector.selectOption("operator");
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), true);
+  assert.equal(
+    await page
+      .locator('[data-action="updateLot:lot-1:consumptionAdjustmentPct:percent"]')
+      .first()
+      .isDisabled(),
+    false,
+  );
+  assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 1);
+  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+
+  await page.evaluate(() => {
+    const input = document.querySelector('[data-action="updateLot:lot-1:lotCode:text"]');
+    input.disabled = false;
+    input.value = "ALTERADO";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.getByText("Acción no permitida para el rol activo.").waitFor();
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').inputValue(), "LOTE-ROLES");
+
+  await roleSelector.selectOption("admin_arizona");
+  page.once("dialog", async (dialog) => {
+    assert.match(dialog.message(), /desbloquear los datos iniciales/i);
+    await dialog.accept();
+  });
+  await page.locator('[data-action="unlockInitialData"]').click();
+  await page.getByText("Datos iniciales desbloqueados y guardados.").waitFor();
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), false);
+  await page.locator('[data-action="lockInitialData"]').click();
+  await page.getByText("Datos iniciales bloqueados y guardados.").waitFor();
+
+  await page.getByRole("link", { name: "ADAPT", exact: true }).click();
+  const ingredientAction = "updateIngredient:ADAPTACION:ad-1:costBsTon:currency";
+  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), false);
+  await updateField(page, ingredientAction, "250");
+  await page.locator('[data-action="lockDiet:ADAPTACION"]').click();
+  await page.getByText("Dieta bloqueada y guardada.").waitFor();
+  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), true);
+
+  database = await readMockDatabase(page);
+  currentSnapshot = database.snapshots.find(
+    (snapshot) => snapshot.id === database.workDay.last_snapshot_id,
+  );
+  assert.equal(currentSnapshot.input_state.accessControl.dietLocks.ADAPTACION, true);
+
+  page.once("dialog", async (dialog) => {
+    assert.match(dialog.message(), /desbloquear la dieta/i);
+    await dialog.accept();
+  });
+  await page.locator('[data-action="unlockDiet:ADAPTACION"]').click();
+  await page.getByText("Dieta desbloqueada y guardada.").waitFor();
+  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), false);
+  await page.locator('[data-action="lockDiet:ADAPTACION"]').click();
+  await page.getByText("Dieta bloqueada y guardada.").waitFor();
+
+  await roleSelector.selectOption("operator");
+  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), true);
+  await page.evaluate((action) => {
+    const input = document.querySelector(`[data-action="${action}"]`);
+    input.disabled = false;
+    input.value = "999";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, ingredientAction);
+  await page.getByText("Acción no permitida para el rol activo.").waitFor();
+  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).inputValue(), "250");
+
+  await page.getByRole("link", { name: "ADAPTACION", exact: true }).click();
+  assert.equal(
+    await page.locator('[data-action="updateTreatment:ADAPTACION:1:time:text"]').isDisabled(),
+    true,
+  );
+  assert.equal(
+    await page.locator('[data-action="updateTreatment:ADAPTACION:1:sharePct:percent"]').isDisabled(),
+    true,
+  );
+  const actualAction = "updateFeedingActual:ADAPTACION:lot-1:1:number";
+  assert.equal(await page.locator(`[data-action="${actualAction}"]`).isDisabled(), false);
+  await updateField(page, actualAction, "12.5");
+
+  await page.getByRole("link", { name: "ANOTACION DE CONSUMO", exact: true }).click();
+  const consumptionAction = "updateConsumption:lot-1:msRealizedManual:number";
+  assert.equal(await page.locator(`[data-action="${consumptionAction}"]`).isDisabled(), false);
+  await updateField(page, consumptionAction, "10.25");
+  await page.locator('[data-action="saveWorkDay"]').click();
+  await page.getByText("Guardado correctamente.").waitFor();
+
+  await roleSelector.selectOption("admin_arizona");
+  await page.locator('[data-action="saveRegistroHistory"]').click();
+  await page.getByText(/Registro histórico guardado correctamente/).waitFor();
+  await roleSelector.selectOption("operator");
+  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+
+  await page.getByRole("link", { name: "HISTORIAL", exact: true }).click();
+  await page.getByRole("button", { name: "Ver registro", exact: true }).click();
+  await page.getByText("Vista histórica", { exact: false }).waitFor();
+  assert.equal(await page.locator("main.workspace input:not([data-action='setLocalRole']), main.workspace textarea").count(), 0);
+  assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 0);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("link", { name: "Ingreso", exact: true }).click();
+  assert.equal(await page.locator('[data-action="setLocalRole"]').inputValue(), "operator");
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), true);
+  await page.getByRole("link", { name: "ADAPT", exact: true }).click();
+  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), true);
 
   const visibleText = await page.locator("body").innerText();
   assert.doesNotMatch(visibleText, /\b(?:NaN|Infinity|undefined)\b/);

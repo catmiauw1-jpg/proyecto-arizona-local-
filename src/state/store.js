@@ -1,5 +1,7 @@
-﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260621-stage1-clean-all";
+﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260723-phase-d";
 import { calculateState } from "../domain/calculations.js?v=20260621-stage1-clean-all";
+
+import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260723-phase-d";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -13,17 +15,28 @@ export function getState() {
 }
 
 export function setState(nextState) {
+  const emptyState = createEmptyPeriodState();
+  const accessControl = nextState?.accessControl ?? {};
+  const dietLocks = accessControl.dietLocks ?? {};
+
   state = clone({
-    ...createEmptyPeriodState(),
+    ...emptyState,
     ...(nextState ?? {}),
     config: {
-      ...createEmptyPeriodState().config,
+      ...emptyState.config,
       ...(nextState?.config ?? {}),
     },
-    diets: nextState?.diets ?? createEmptyPeriodState().diets,
-    lots: nextState?.lots ?? createEmptyPeriodState().lots,
+    diets: nextState?.diets ?? emptyState.diets,
+    lots: nextState?.lots ?? emptyState.lots,
     consumptionNotes: nextState?.consumptionNotes ?? {},
     feedingActuals: nextState?.feedingActuals ?? {},
+    accessControl: {
+      ...createDefaultAccessControl(),
+      initialDataLocked: accessControl.initialDataLocked === true,
+      dietLocks: Object.fromEntries(
+        DIET_IDS.map((dietId) => [dietId, dietLocks[dietId] === true]),
+      ),
+    },
   });
   emit();
 }
@@ -165,6 +178,35 @@ export function applyConsumptionFromCalculated(consumptionRows) {
     consumptionNotes,
   };
   emit();
+}
+
+export function setInitialDataLocked(locked) {
+  state = {
+    ...state,
+    accessControl: {
+      ...state.accessControl,
+      initialDataLocked: locked === true,
+    },
+  };
+  emit();
+  return true;
+}
+
+export function setDietLocked(dietId, locked) {
+  if (!DIET_IDS.includes(dietId)) return false;
+
+  state = {
+    ...state,
+    accessControl: {
+      ...state.accessControl,
+      dietLocks: {
+        ...state.accessControl.dietLocks,
+        [dietId]: locked === true,
+      },
+    },
+  };
+  emit();
+  return true;
 }
 
 

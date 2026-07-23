@@ -1,13 +1,18 @@
 ﻿import { formatNumber, round } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-all";
-import { simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-d";
+import { simpleTable } from "../components/table.js?v=20260723-phase-d";
+
+import { valueInput } from "../components/fields.js?v=20260723-phase-d";
+import { canEditConsumptionNotes } from "../domain/permissions.js?v=20260723-phase-d";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 function inputNumber(value) {
   if (value === "" || value === null || value === undefined) return "";
   return round(value, 2).toFixed(2);
 }
 
-export function consumptionScreen(computed) {
+export function consumptionScreen(computed, permissionContext = {}) {
+  const editable = canEditConsumptionNotes(permissionContext.role);
   const totalExpectedMs = computed.consumptionRows.reduce((total, row) => total + row.expectedMs, 0);
   const totalRealizedMs = computed.consumptionRows.reduce((total, row) => total + row.realizedMs, 0);
   const totalExpectedMo = computed.consumptionRows.reduce((total, row) => total + row.expectedMo, 0);
@@ -23,6 +28,7 @@ export function consumptionScreen(computed) {
         type="button"
         data-action="applyConsumptionFromCalculated"
         title="Copia los valores calculados a los campos editables"
+        ${editable ? "" : 'disabled aria-disabled="true"'}
       >
         Copiar valores calculados
       </button>
@@ -37,16 +43,36 @@ export function consumptionScreen(computed) {
   ]);
 
   const rows = computed.consumptionRows.map((row) => [
-    row.pen,
-    row.currentDiet,
+    escapeHtml(row.pen),
+    escapeHtml(row.currentDiet),
     formatNumber(row.expectedMs),
     formatNumber(row.realizedMs),
     formatNumber(row.expectedMo),
     formatNumber(row.realizedMo),
-    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.msPlannedManual)}" data-action="updateConsumption:${row.lotId}:msPlannedManual:number" />`,
-    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.msRealizedManual)}" data-action="updateConsumption:${row.lotId}:msRealizedManual:number" />`,
-    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.moPlannedManual)}" data-action="updateConsumption:${row.lotId}:moPlannedManual:number" />`,
-    `<input type="text" inputmode="decimal" step="0.01" value="${inputNumber(row.moRealizedManual)}" data-action="updateConsumption:${row.lotId}:moRealizedManual:number" />`,
+    valueInput({
+      value: inputNumber(row.msPlannedManual),
+      type: "number",
+      onInput: `updateConsumption:${row.lotId}:msPlannedManual:number`,
+      disabled: !editable,
+    }),
+    valueInput({
+      value: inputNumber(row.msRealizedManual),
+      type: "number",
+      onInput: `updateConsumption:${row.lotId}:msRealizedManual:number`,
+      disabled: !editable,
+    }),
+    valueInput({
+      value: inputNumber(row.moPlannedManual),
+      type: "number",
+      onInput: `updateConsumption:${row.lotId}:moPlannedManual:number`,
+      disabled: !editable,
+    }),
+    valueInput({
+      value: inputNumber(row.moRealizedManual),
+      type: "number",
+      onInput: `updateConsumption:${row.lotId}:moRealizedManual:number`,
+      disabled: !editable,
+    }),
   ]);
 
   const table = simpleTable(

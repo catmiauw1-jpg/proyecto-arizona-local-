@@ -1,5 +1,8 @@
 ﻿import { SHEETS } from "../domain/model.js?v=20260621-stage1-clean-all";
 
+import { ROLES, roleLabel } from "../domain/permissions.js?v=20260723-phase-d";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
+
 function formatDateTime(value) {
   if (!value) return "Sin guardar";
   const date = new Date(value);
@@ -22,24 +25,36 @@ function dayStatusBar(workDayContext) {
   const status = statusLabels[workDayContext.saveStatus] ?? "Sin guardar";
   const disabled = workDayContext.saveStatus === "saving" ? "disabled" : "";
   const historyDisabled = workDayContext.historyStatus === "saving" ? "disabled" : "";
+  const canSaveWorkDay = workDayContext.permissions?.canSaveWorkDay === true;
+  const canSaveHistory = workDayContext.permissions?.canSaveHistory === true;
   const actions = workDayContext.isHistoryView
     ? '<strong>Solo consulta</strong>'
     : `
-      <button type="button" data-action="saveWorkDay" ${disabled}>Guardar día</button>
-      <button type="button" class="secondary-action" data-action="saveRegistroHistory" ${historyDisabled}>
-        Guardar día en historial
-      </button>
+      ${
+        canSaveWorkDay
+          ? `<button type="button" data-action="saveWorkDay" ${disabled}>Guardar día</button>`
+          : ""
+      }
+      ${
+        canSaveHistory
+          ? `
+            <button type="button" class="secondary-action" data-action="saveRegistroHistory" ${historyDisabled}>
+              Guardar día en historial
+            </button>
+          `
+          : ""
+      }
     `;
 
   return `
     <div class="day-status-bar">
       <div>
         <span>Día activo</span>
-        <strong>${workDayContext.period?.name ?? "Periodo activo"}</strong>
+        <strong>${escapeHtml(workDayContext.period?.name ?? "Periodo activo")}</strong>
       </div>
       <div>
         <span>Fecha de trabajo</span>
-        <strong>${workDayContext.workDate ?? workDayContext.workDay.work_date ?? ""}</strong>
+        <strong>${escapeHtml(workDayContext.workDate ?? workDayContext.workDay.work_date ?? "")}</strong>
       </div>
       <div>
         <span>Último guardado</span>
@@ -50,12 +65,40 @@ function dayStatusBar(workDayContext) {
         <strong>${status}</strong>
       </div>
       ${actions}
-      ${workDayContext.message ? `<p>${workDayContext.message}</p>` : ""}
+      ${workDayContext.message ? `<p>${escapeHtml(workDayContext.message)}</p>` : ""}
     </div>
   `;
 }
 
-export function appLayout({ activeSheet, content, sessionContext = null, workDayContext = null }) {
+function localRoleTool(roleContext) {
+  if (!roleContext?.localToolEnabled) return "";
+
+  return `
+    <div class="local-role-tool" role="region" aria-label="Herramienta local de prueba">
+      <strong>Herramienta local de prueba</strong>
+      <label>
+        <span>Rol activo</span>
+        <select data-action="setLocalRole">
+          <option value="${ROLES.ADMIN}" ${roleContext.role === ROLES.ADMIN ? "selected" : ""}>
+            ${roleLabel(ROLES.ADMIN)}
+          </option>
+          <option value="${ROLES.OPERATOR}" ${roleContext.role === ROLES.OPERATOR ? "selected" : ""}>
+            ${roleLabel(ROLES.OPERATOR)}
+          </option>
+        </select>
+      </label>
+      <span>No forma parte de la interfaz final.</span>
+    </div>
+  `;
+}
+
+export function appLayout({
+  activeSheet,
+  content,
+  sessionContext = null,
+  workDayContext = null,
+  roleContext = null,
+}) {
   const userEmail = sessionContext?.user?.email ?? "";
   const clientName = sessionContext?.client?.name ?? "";
 
@@ -84,8 +127,8 @@ export function appLayout({ activeSheet, content, sessionContext = null, workDay
           sessionContext
             ? `
               <div class="session-card">
-                <span>${clientName}</span>
-                <strong>${userEmail}</strong>
+                <span>${escapeHtml(clientName)}</span>
+                <strong>${escapeHtml(userEmail)}</strong>
                 <button type="button" data-action="authSignOut">Cerrar sesion</button>
               </div>
             `
@@ -93,6 +136,7 @@ export function appLayout({ activeSheet, content, sessionContext = null, workDay
         }
       </aside>
       <main class="workspace">
+        ${localRoleTool(roleContext)}
         ${dayStatusBar(workDayContext)}
         ${content}
       </main>
@@ -104,9 +148,9 @@ export function screenHeader({ title, eyebrow, description, actions = "" }) {
   return `
     <header class="screen-header">
       <div>
-        <span class="eyebrow">${eyebrow}</span>
-        <h1>${title}</h1>
-        <p>${description}</p>
+        <span class="eyebrow">${escapeHtml(eyebrow)}</span>
+        <h1>${escapeHtml(title)}</h1>
+        <p>${escapeHtml(description)}</p>
       </div>
       <div class="screen-actions">${actions}</div>
     </header>
@@ -117,7 +161,7 @@ export function section(title, content, aside = "") {
   return `
     <section class="section">
       <div class="section-title">
-        <h2>${title}</h2>
+        <h2>${escapeHtml(title)}</h2>
         ${aside ? `<div>${aside}</div>` : ""}
       </div>
       ${content}
@@ -132,7 +176,7 @@ export function metricGrid(metrics) {
         .map(
           (metric) => `
             <div class="metric">
-              <span>${metric.label}</span>
+              <span>${escapeHtml(metric.label)}</span>
               <strong>${metric.value}</strong>
             </div>
           `,
@@ -145,15 +189,15 @@ export function metricGrid(metrics) {
 export function formulaNote({ status = "pending", title, text }) {
   return `
     <div class="formula-note ${status}">
-      <strong>${title}</strong>
-      <span>${text}</span>
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(text)}</span>
     </div>
   `;
 }
 
 export function statusPill(status) {
   const ok = status === "Correcto";
-  return `<span class="status-pill ${ok ? "ok" : "warn"}">${status}</span>`;
+  return `<span class="status-pill ${ok ? "ok" : "warn"}">${escapeHtml(status)}</span>`;
 }
 
 

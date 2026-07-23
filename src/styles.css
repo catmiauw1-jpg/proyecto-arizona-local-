@@ -162,6 +162,38 @@ button {
   padding: 24px;
 }
 
+.local-role-tool {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(220px, 320px) 1fr;
+  gap: 12px 18px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d3aa56;
+  border-radius: 6px;
+  background: #fff8df;
+  color: #674c17;
+}
+
+.local-role-tool > strong {
+  font-size: 13px;
+}
+
+.local-role-tool > span {
+  color: #7b663a;
+  font-size: 12px;
+}
+
+.local-role-tool label {
+  grid-template-columns: auto minmax(150px, 1fr);
+  align-items: center;
+}
+
+.local-role-tool select {
+  min-height: 32px;
+  background: #ffffff;
+}
+
 .day-status-bar {
   display: grid;
   grid-template-columns: repeat(4, minmax(130px, 1fr)) auto auto;
@@ -374,6 +406,52 @@ h2 {
   background: var(--green-dark);
 }
 
+.primary-action:disabled,
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.lock-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 4px;
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.lock-banner strong {
+  font-size: 13px;
+}
+
+.lock-banner span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lock-banner.is-locked {
+  border-left-color: var(--red);
+  background: #fff6f5;
+}
+
+.lock-banner.is-locked strong {
+  color: var(--red);
+}
+
+.lock-banner.is-editable {
+  border-left-color: var(--green);
+  background: #f2f8f5;
+}
+
+.lock-banner.is-editable strong {
+  color: var(--green-dark);
+}
+
 .history-banner,
 .history-message {
   display: flex;
@@ -469,6 +547,15 @@ select {
   color: var(--ink);
 }
 
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  border-color: var(--line);
+  background: var(--locked);
+  color: #555f5a;
+  opacity: 1;
+}
+
 select {
   cursor: pointer;
 }
@@ -553,6 +640,10 @@ th:last-child {
 
 .input-cell {
   background: var(--input);
+}
+
+.disabled-input-cell {
+  background: var(--locked);
 }
 
 .calc-cell {
@@ -837,6 +928,14 @@ th:last-child {
 
   .workspace {
     padding: 16px;
+  }
+
+  .local-role-tool {
+    grid-template-columns: 1fr;
+  }
+
+  .local-role-tool label {
+    grid-template-columns: 1fr;
   }
 
   .day-status-bar {

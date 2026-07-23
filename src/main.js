@@ -1,12 +1,12 @@
 ﻿import { SHEETS } from "./domain/model.js?v=20260621-stage1-clean-all";
 import { toNumber } from "./domain/formatters.js?v=20260621-stage1-clean-all";
-import { appLayout } from "./components/layout.js?v=20260621-stage1-clean-all";
-import { dietScreen } from "./screens/dietScreen.js?v=20260621-stage1-clean-all";
-import { feedingScreen } from "./screens/feedingScreen.js?v=20260621-stage1-clean-all";
-import { incomeScreen } from "./screens/incomeScreen.js?v=20260621-stage1-clean-all";
-import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260621-stage1-clean-all";
-import { reportScreen } from "./screens/reportScreen.js?v=20260621-stage1-clean-all";
-import { historyScreen } from "./screens/historyScreen.js?v=20260621-stage1-clean-all";
+import { appLayout } from "./components/layout.js?v=20260723-phase-d";
+import { dietScreen } from "./screens/dietScreen.js?v=20260723-phase-d";
+import { feedingScreen } from "./screens/feedingScreen.js?v=20260723-phase-d";
+import { incomeScreen } from "./screens/incomeScreen.js?v=20260723-phase-d";
+import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260723-phase-d";
+import { reportScreen } from "./screens/reportScreen.js?v=20260723-phase-d";
+import { historyScreen } from "./screens/historyScreen.js?v=20260723-phase-d";
 import { loadingScreen, loginScreen } from "./screens/loginScreen.js?v=20260621-stage1-clean-all";
 import { loadAuthorizedSession, signInWithPassword, signOut } from "./services/authService.js?v=20260621-stage1-clean-all";
 import {
@@ -20,6 +20,8 @@ import {
   getComputedState,
   getState,
   resetState,
+  setDietLocked,
+  setInitialDataLocked,
   setState,
   subscribe,
   updateConfig,
@@ -29,9 +31,34 @@ import {
   updateIngredient,
   updateLot,
   updateTreatment,
-} from "./state/store.js?v=20260621-stage1-clean-all";
+} from "./state/store.js?v=20260723-phase-d";
+
+import {
+  canEditConsumptionNotes,
+  canEditDiet,
+  canEditFeedingActuals,
+  canEditHistory,
+  canEditIncomeConfig,
+  canEditLotField,
+  canEditTreatmentConfig,
+  canLockDiet,
+  canLockInitialData,
+  canSaveHistory,
+  canSaveWorkDay,
+  canUnlockDiet,
+  canUnlockInitialData,
+  canViewHistory,
+  isLocalDevelopmentHost,
+  normalizeRole,
+} from "./domain/permissions.js?v=20260723-phase-d";
+import {
+  buildDaySummary,
+  buildRegistroHistorySummary,
+} from "./domain/snapshotSummaries.js?v=20260723-phase-d";
 
 const app = document.querySelector("#app");
+const localRoleToolEnabled = isLocalDevelopmentHost(window.location.hostname);
+let localRoleOverride = null;
 let authState = {
   status: "loading",
   user: null,
@@ -86,88 +113,30 @@ function parseValue(value, type) {
   return value;
 }
 
-function routeContent(sheet, state, computed) {
-  if (sheet.id === "Ingreso") return incomeScreen(state, computed);
-  if (sheet.kind === "diet") return dietScreen(sheet, state, computed);
-  if (sheet.kind === "feeding") return feedingScreen(sheet, state, computed);
-  if (sheet.kind === "consumption") return consumptionScreen(computed);
+function activeRole() {
+  return localRoleOverride ?? normalizeRole(authState.profile?.role);
+}
+
+function buildPermissionContext(state, sheet = findSheet()) {
+  return {
+    role: activeRole(),
+    initialDataLocked: state.accessControl.initialDataLocked,
+    dietLocked: sheet.dietId ? state.accessControl.dietLocks[sheet.dietId] === true : false,
+  };
+}
+
+function routeContent(sheet, state, computed, permissionContext) {
+  if (sheet.id === "Ingreso") return incomeScreen(state, computed, permissionContext);
+  if (sheet.kind === "diet") return dietScreen(sheet, state, computed, permissionContext);
+  if (sheet.kind === "feeding") return feedingScreen(sheet, state, computed, permissionContext);
+  if (sheet.kind === "consumption") return consumptionScreen(computed, permissionContext);
   if (sheet.kind === "report") return reportScreen(computed);
-  if (sheet.kind === "history") return historyScreen(historyState);
+  if (sheet.kind === "history" && canViewHistory(permissionContext.role)) return historyScreen(historyState);
   return "";
 }
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
-}
-
-function buildDaySummary(state, computed) {
-  const totalAnimals = computed.lots.reduce((total, lot) => total + Number(lot.animalCount || 0), 0);
-  const totalFeedMs = computed.lots.reduce((total, lot) => total + Number(lot.totalFeedMs || 0), 0);
-  const totalFeedMo = computed.lots.reduce((total, lot) => total + Number(lot.totalFeedMo || 0), 0);
-  const totalFinancial = computed.reportRows.reduce((total, row) => total + Number(row.financialTotal || 0), 0);
-  const activeLots = computed.lots.filter(
-    (lot) => lot.lotCode || Number(lot.animalCount || 0) > 0 || lot.currentDiet,
-  ).length;
-
-  return {
-    clientName: state.config.clientName,
-    workDate: state.config.workDate,
-    activeLots,
-    totalAnimals,
-    totalFeedMs,
-    totalFeedMo,
-    totalFinancial,
-    diets: Object.fromEntries(
-      Object.entries(computed.diets).map(([dietId, diet]) => [
-        dietId,
-        {
-          status: diet.totals.status,
-          treatmentStatus: diet.totals.treatmentStatus,
-          dietDryMatterPct: diet.totals.dietDryMatterPct,
-          costBsKg: diet.totals.costBsKg,
-        },
-      ]),
-    ),
-  };
-}
-
-function compactReportRows(reportRows) {
-  return reportRows.map((row) => ({
-    pen: row.pen,
-    currentDiet: row.currentDiet,
-    dietName: row.dietName,
-    lotCode: row.lotCode,
-    animalCount: Number(row.animalCount || 0),
-    estimatedWeight: Number(row.estimatedWeight || 0),
-    cmoLot: Number(row.cmoLot || 0),
-    cmoAnimal: Number(row.cmoAnimal || 0),
-    cmsLot: Number(row.cmsLot || 0),
-    cmsAnimal: Number(row.cmsAnimal || 0),
-    imsPct: Number(row.imsPct || 0),
-    nutritionalCostAnimal: Number(row.nutritionalCostAnimal || 0),
-    nutritionalCostLot: Number(row.nutritionalCostLot || 0),
-    financialAverage: Number(row.financialAverage || 0),
-    financialTotal: Number(row.financialTotal || 0),
-  }));
-}
-
-function buildRegistroHistorySummary(state, computed) {
-  const reportRows = compactReportRows(computed.reportRows);
-  const activeRows = reportRows.filter(
-    (row) => row.lotCode || row.animalCount > 0 || row.currentDiet,
-  );
-
-  return {
-    clientName: state.config.clientName,
-    workDate: state.config.workDate,
-    activePens: activeRows.length,
-    totalAnimals: reportRows.reduce((total, row) => total + row.animalCount, 0),
-    totalCmsLot: reportRows.reduce((total, row) => total + row.cmsLot, 0),
-    totalCmoLot: reportRows.reduce((total, row) => total + row.cmoLot, 0),
-    totalNutritionalCost: reportRows.reduce((total, row) => total + row.nutritionalCostLot, 0),
-    totalFinancial: reportRows.reduce((total, row) => total + row.financialTotal, 0),
-    reportRows,
-  };
 }
 
 function cleanStateFromWorkDay(period, workDay) {
@@ -251,22 +220,46 @@ function render() {
   }
 
   const sheet = findSheet();
-  if (sheet.kind === "history" && historyState.status === "idle") {
+  const state = getState();
+  const computed = getComputedState();
+  const permissionContext = buildPermissionContext(state, sheet);
+  if (
+    sheet.kind === "history" &&
+    historyState.status === "idle" &&
+    canViewHistory(permissionContext.role)
+  ) {
     void handleLoadHistory();
   }
 
-  const state = getState();
-  const computed = getComputedState();
-
   app.innerHTML = appLayout({
     activeSheet: sheet.id,
-    content: routeContent(sheet, state, computed),
+    content: routeContent(sheet, state, computed, permissionContext),
     sessionContext: authState,
     workDayContext: {
       ...workDayState,
       isHistoryView: sheet.kind === "history" && Boolean(historyState.selectedSnapshot),
+      permissions: {
+        canSaveWorkDay: canSaveWorkDay(permissionContext.role),
+        canSaveHistory: canSaveHistory(permissionContext.role),
+      },
+    },
+    roleContext: {
+      role: permissionContext.role,
+      localToolEnabled: localRoleToolEnabled,
     },
   });
+}
+
+function rejectUnauthorizedChange() {
+  workDayState = {
+    ...workDayState,
+    message: "Acción no permitida para el rol activo.",
+  };
+  render();
+}
+
+function editingHistoricalSnapshot() {
+  return findSheet().kind === "history" && Boolean(historyState.selectedSnapshot);
 }
 
 function handleCommit(event) {
@@ -275,47 +268,100 @@ function handleCommit(event) {
 
   const parts = action.split(":");
   const command = parts[0];
+  const role = activeRole();
+  const state = getState();
+
+  if (command === "setLocalRole") {
+    const nextRole = normalizeRole(event.target.value);
+    if (!localRoleToolEnabled || !nextRole) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    localRoleOverride = nextRole;
+    render();
+    return;
+  }
+
+  if (editingHistoricalSnapshot() && !canEditHistory(role)) {
+    rejectUnauthorizedChange();
+    return;
+  }
 
   if (command === "updateConfig") {
+    if (!canEditIncomeConfig(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
     const [, key, type] = parts;
     updateConfig(key, parseValue(event.target.value, type));
     markUnsaved();
+    return;
   }
 
   if (command === "updateDiet") {
     const [, dietId, key, type] = parts;
+    if (!canEditDiet(role, state.accessControl.dietLocks[dietId])) {
+      rejectUnauthorizedChange();
+      return;
+    }
     updateDietField(dietId, key, parseValue(event.target.value, type));
     markUnsaved();
+    return;
   }
 
   if (command === "updateIngredient") {
     const [, dietId, ingredientId, key, type] = parts;
+    if (!canEditDiet(role, state.accessControl.dietLocks[dietId])) {
+      rejectUnauthorizedChange();
+      return;
+    }
     updateIngredient(dietId, ingredientId, key, parseValue(event.target.value, type));
     markUnsaved();
+    return;
   }
 
   if (command === "updateTreatment") {
     const [, dietId, treatmentNumber, key, type] = parts;
+    if (!canEditTreatmentConfig(role, state.accessControl.dietLocks[dietId])) {
+      rejectUnauthorizedChange();
+      return;
+    }
     updateTreatment(dietId, Number(treatmentNumber), key, parseValue(event.target.value, type));
     markUnsaved();
+    return;
   }
 
   if (command === "updateLot") {
     const [, lotId, key, type] = parts;
+    if (!canEditLotField(role, state.accessControl.initialDataLocked, key)) {
+      rejectUnauthorizedChange();
+      return;
+    }
     updateLot(lotId, key, parseValue(event.target.value, type));
     markUnsaved();
+    return;
   }
 
   if (command === "updateConsumption") {
     const [, lotId, key, type] = parts;
+    if (!canEditConsumptionNotes(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
     updateConsumption(lotId, key, parseValue(event.target.value, type));
     markUnsaved();
+    return;
   }
 
   if (command === "updateFeedingActual") {
     const [, dietId, lotId, treatmentNumber, type] = parts;
+    if (!canEditFeedingActuals(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
     updateFeedingActual(dietId, lotId, Number(treatmentNumber), parseValue(event.target.value, type));
     markUnsaved();
+    return;
   }
 
 }
@@ -329,40 +375,90 @@ function handleKeyDown(event) {
 }
 function handleClick(event) {
   const action = event.target?.closest("[data-action]")?.dataset?.action;
+  const role = activeRole();
 
   if (action === "applyConsumptionFromCalculated") {
+    if (!canEditConsumptionNotes(role) || editingHistoricalSnapshot()) {
+      rejectUnauthorizedChange();
+      return;
+    }
     applyConsumptionFromCalculated(getComputedState().consumptionRows);
     markUnsaved();
+    return;
   }
 
   if (action === "saveWorkDay") {
+    if (!canSaveWorkDay(role) || editingHistoricalSnapshot()) {
+      rejectUnauthorizedChange();
+      return;
+    }
     void handleSaveWorkDay();
+    return;
   }
 
   if (action === "saveRegistroHistory") {
+    if (!canSaveHistory(role) || editingHistoricalSnapshot()) {
+      rejectUnauthorizedChange();
+      return;
+    }
     void handleSaveRegistroHistory();
+    return;
+  }
+
+  if (action === "lockInitialData") {
+    void handleInitialDataLock(true);
+    return;
+  }
+
+  if (action === "unlockInitialData") {
+    void handleInitialDataLock(false);
+    return;
+  }
+
+  if (action?.startsWith("lockDiet:")) {
+    const [, dietId] = action.split(":");
+    void handleDietLock(dietId, true);
+    return;
+  }
+
+  if (action?.startsWith("unlockDiet:")) {
+    const [, dietId] = action.split(":");
+    void handleDietLock(dietId, false);
+    return;
   }
 
   if (action === "loadHistory") {
+    if (!canViewHistory(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
     void handleLoadHistory();
+    return;
   }
 
   if (action?.startsWith("openHistorySnapshot:")) {
+    if (!canViewHistory(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
     const [, snapshotId] = action.split(":");
     historyState = {
       ...historyState,
       selectedSnapshot: historyState.snapshots.find((snapshot) => snapshot.id === snapshotId) ?? null,
     };
     render();
+    return;
   }
 
   if (action === "closeHistorySnapshot") {
     historyState = { ...historyState, selectedSnapshot: null };
     window.location.hash = "#/Ingreso";
     render();
+    return;
   }
 
   if (action === "authSignOut") {
+    localRoleOverride = null;
     authState = { ...authState, status: "loading" };
     workDayState = {
       status: "idle",
@@ -406,8 +502,8 @@ function handleHistoryFilter(event) {
   render();
 }
 
-async function handleSaveWorkDay() {
-  if (workDayState.saveStatus === "saving") return;
+async function handleSaveWorkDay(successMessage = "Guardado correctamente.") {
+  if (workDayState.saveStatus === "saving") return false;
   if (!workDayState.workDay?.id) {
     workDayState = {
       ...workDayState,
@@ -415,12 +511,13 @@ async function handleSaveWorkDay() {
       message: "No hay un día activo para guardar.",
     };
     render();
-    return;
+    return false;
   }
 
   workDayState = { ...workDayState, saveStatus: "saving", message: "" };
   render();
 
+  let saved = false;
   try {
     const inputState = clone(getState());
     const computedState = clone(getComputedState());
@@ -441,8 +538,9 @@ async function handleSaveWorkDay() {
         last_snapshot_id: result?.snapshot_id ?? workDayState.workDay.last_snapshot_id,
         last_saved_at: result?.saved_at ?? workDayState.workDay.last_saved_at,
       },
-      message: "Guardado correctamente.",
+      message: successMessage,
     };
+    saved = true;
   } catch (error) {
     workDayState = {
       ...workDayState,
@@ -452,6 +550,67 @@ async function handleSaveWorkDay() {
   }
 
   render();
+  return saved;
+}
+
+async function handleInitialDataLock(locked) {
+  const state = getState();
+  const role = activeRole();
+  const currentlyLocked = state.accessControl.initialDataLocked;
+  const permitted = locked
+    ? canLockInitialData(role, currentlyLocked)
+    : canUnlockInitialData(role, currentlyLocked);
+
+  if (!permitted || editingHistoricalSnapshot()) {
+    rejectUnauthorizedChange();
+    return;
+  }
+  if (!locked && !window.confirm("¿Desea desbloquear los datos iniciales?")) return;
+  if (workDayState.saveStatus === "saving" || !workDayState.workDay?.id) {
+    workDayState = {
+      ...workDayState,
+      message: "No es posible cambiar el bloqueo mientras el día no está listo.",
+    };
+    render();
+    return;
+  }
+
+  setInitialDataLocked(locked);
+  const saved = await handleSaveWorkDay(
+    locked
+      ? "Datos iniciales bloqueados y guardados."
+      : "Datos iniciales desbloqueados y guardados.",
+  );
+  if (!saved) setInitialDataLocked(currentlyLocked);
+}
+
+async function handleDietLock(dietId, locked) {
+  const state = getState();
+  const role = activeRole();
+  const currentlyLocked = state.accessControl.dietLocks[dietId];
+  const permitted = locked
+    ? canLockDiet(role, currentlyLocked)
+    : canUnlockDiet(role, currentlyLocked);
+
+  if (!Object.hasOwn(state.accessControl.dietLocks, dietId) || !permitted || editingHistoricalSnapshot()) {
+    rejectUnauthorizedChange();
+    return;
+  }
+  if (!locked && !window.confirm("¿Desea desbloquear la dieta?")) return;
+  if (workDayState.saveStatus === "saving" || !workDayState.workDay?.id) {
+    workDayState = {
+      ...workDayState,
+      message: "No es posible cambiar el bloqueo mientras el día no está listo.",
+    };
+    render();
+    return;
+  }
+
+  setDietLocked(dietId, locked);
+  const saved = await handleSaveWorkDay(
+    locked ? "Dieta bloqueada y guardada." : "Dieta desbloqueada y guardada.",
+  );
+  if (!saved) setDietLocked(dietId, currentlyLocked);
 }
 
 async function handleSaveRegistroHistory() {

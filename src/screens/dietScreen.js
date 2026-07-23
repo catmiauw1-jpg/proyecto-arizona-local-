@@ -1,7 +1,7 @@
 ﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-all";
 import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260621-stage1-clean-all";
-import { dataTable, simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-d";
+import { dataTable, simpleTable } from "../components/table.js?v=20260723-phase-d";
 
 const EXCEL_DIET_COLUMNS = [
   { key: "name", label: "INSUMOS", type: "text", input: true },
@@ -13,7 +13,15 @@ const EXCEL_DIET_COLUMNS = [
   { key: "costContributionBsTon", label: "Costo (Bs/ton)", type: "currency", input: false },
 ];
 
-export function dietScreen(sheet, state, computed) {
+import {
+  canEditDiet,
+  canLockDiet,
+  canUnlockDiet,
+} from "../domain/permissions.js?v=20260723-phase-d";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
+
+export function dietScreen(sheet, state, computed, permissionContext = {}) {
+  const { role, dietLocked = false } = permissionContext;
   const diet = computed.diets[sheet.dietId];
   const rawDiet = state.diets[sheet.dietId];
   const usesExcelDietColumns = sheet.id === "ADAPT" || sheet.id === "TRANS" || sheet.id === "TERM";
@@ -26,7 +34,25 @@ export function dietScreen(sheet, state, computed) {
     eyebrow: `Modulo ${sheet.id}`,
     title: rawDiet.title,
     description: "Gestiona ingredientes, costos y resultados calculados de la dieta.",
+    actions: canLockDiet(role, dietLocked)
+      ? `<button class="primary-action" type="button" data-action="lockDiet:${sheet.dietId}">Guardar y bloquear dieta</button>`
+      : canUnlockDiet(role, dietLocked)
+        ? `<button class="secondary-action" type="button" data-action="unlockDiet:${sheet.dietId}">Desbloquear dieta</button>`
+        : "",
   });
+
+  const lockStatus = `
+    <div class="lock-banner ${dietLocked ? "is-locked" : "is-editable"}">
+      <strong>${dietLocked ? "Dieta bloqueada" : "Dieta editable"}</strong>
+      <span>
+        ${
+          dietLocked
+            ? "La configuración requiere desbloqueo administrativo para modificarse."
+            : "La configuración todavía no fue bloqueada."
+        }
+      </span>
+    </div>
+  `;
 
   const metrics = metricGrid([
     { label: "MS dieta", value: formatPercent(diet.totals.dietDryMatterPct) },
@@ -39,11 +65,11 @@ export function dietScreen(sheet, state, computed) {
     <div class="form-grid small">
       <label>
         <span>Consumo</span>
-        <span class="locked-field">${rawDiet.consumption}</span>
+        <span class="locked-field">${escapeHtml(rawDiet.consumption)}</span>
       </label>
       <label>
         <span>GMD estimado</span>
-        <span class="locked-field">${rawDiet.estimatedGmd}</span>
+        <span class="locked-field">${escapeHtml(rawDiet.estimatedGmd)}</span>
       </label>
     </div>
   `;
@@ -52,7 +78,8 @@ export function dietScreen(sheet, state, computed) {
     columns: ingredientColumns,
     rows: diet.rows,
     rowId: (row) => row.id,
-    actionPrefix: `updateIngredient:${rawDiet.id}`,
+    actionPrefix: `updateIngredient:${sheet.dietId}`,
+    isEditable: () => canEditDiet(role, dietLocked),
   });
 
   const totals = simpleTable(
@@ -71,6 +98,7 @@ export function dietScreen(sheet, state, computed) {
 
   return `
     ${header}
+    ${lockStatus}
     ${metrics}
     ${section("Parametros de dieta", setup)}
     ${section("Ingredientes", table)}

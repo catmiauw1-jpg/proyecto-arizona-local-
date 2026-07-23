@@ -1,6 +1,13 @@
-﻿import { calculatedCell, valueInput } from "./fields.js?v=20260621-stage1-clean-all";
+﻿import { calculatedCell, valueInput } from "./fields.js?v=20260723-phase-d";
 
-export function dataTable({ columns, rows, rowId, actionPrefix, compact = false }) {
+export function dataTable({
+  columns,
+  rows,
+  rowId,
+  actionPrefix,
+  compact = false,
+  isEditable = () => true,
+}) {
   return `
     <div class="table-wrap ${compact ? "compact" : ""}">
       <table>
@@ -29,13 +36,15 @@ export function dataTable({ columns, rows, rowId, actionPrefix, compact = false 
                       const cellClass = column.role === "locked" ? "locked-cell" : "calc-cell";
                       return `<td class="${cellClass}" data-label="${column.label}">${calculatedCell(value, column.type)}</td>`;
                       }
+                      const editable = isEditable({ column, row });
                       return `
-                        <td class="input-cell" data-label="${column.label}">
+                        <td class="input-cell ${editable ? "" : "disabled-input-cell"}" data-label="${column.label}">
                           ${valueInput({
                             value,
                             type: column.type,
                             options: column.options ?? [],
                             onInput: `${actionPrefix}:${rowId(row)}:${column.key}:${column.type}`,
+                            disabled: !editable,
                           })}
                         </td>
                       `;

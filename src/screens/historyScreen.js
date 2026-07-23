@@ -1,8 +1,8 @@
 import { formatCurrency, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-all";
-import { simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-d";
+import { simpleTable } from "../components/table.js?v=20260723-phase-d";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
-import { reportScreen } from "./reportScreen.js?v=20260621-stage1-clean-all";
+import { reportScreen } from "./reportScreen.js?v=20260723-phase-d";
 
 function formatDateTime(value) {
   if (!value) return "";

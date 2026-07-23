@@ -109,6 +109,15 @@ export function createEmptyPeriodState() {
     lots: buildEmptyLots(20),
     consumptionNotes: {},
     feedingActuals: {},
+    accessControl: {
+      version: 1,
+      initialDataLocked: false,
+      dietLocks: {
+        ADAPTACION: false,
+        TRANSICION: false,
+        TERMINACION: false,
+      },
+    },
   };
 }
 

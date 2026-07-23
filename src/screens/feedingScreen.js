@@ -1,7 +1,13 @@
-import { valueInput } from "../components/fields.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260621-stage1-clean-all";
-import { simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
+import { valueInput } from "../components/fields.js?v=20260723-phase-d";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-d";
+import { simpleTable } from "../components/table.js?v=20260723-phase-d";
 import { formatCurrency, formatNumber, formatPercent, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
+
+import {
+  canEditFeedingActuals,
+  canEditTreatmentConfig,
+} from "../domain/permissions.js?v=20260723-phase-d";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 function feedingActualValue(state, dietId, lotId, treatment) {
   return state.feedingActuals?.[dietId]?.[lotId]?.[treatment];
@@ -70,7 +76,7 @@ function buildExcelLotRows(state, calculatedDiet, plan) {
   });
 }
 
-function excelPlanTable(state, calculatedDiet, plan) {
+function excelPlanTable(state, calculatedDiet, plan, permissionContext) {
   const lotRows = buildExcelLotRows(state, calculatedDiet, plan);
   const headers = [
     "Piquete",
@@ -141,6 +147,7 @@ function excelPlanTable(state, calculatedDiet, plan) {
                       value: realizedValue,
                       type: "number",
                       onInput: `updateFeedingActual:${plan.dietId}:${lot.lotId}:${number}:number`,
+                      disabled: !canEditFeedingActuals(permissionContext.role),
                     })}
                   </td>`,
                   `<td class="calc-cell" data-label="${number}° Costo/trato">${formatCurrency(treatment.cost)}</td>`,
@@ -151,8 +158,8 @@ function excelPlanTable(state, calculatedDiet, plan) {
 
               return `
                 <tr>
-                  <td class="locked-cell" data-label="Piquete">${lot.pen}</td>
-                  <td class="locked-cell" data-label="Lote">${lot.lotCode}</td>
+                  <td class="locked-cell" data-label="Piquete">${escapeHtml(lot.pen)}</td>
+                  <td class="locked-cell" data-label="Lote">${escapeHtml(lot.lotCode)}</td>
                   ${treatmentCells.join("")}
                   <td class="calc-cell" data-label="COSTO LOTE">${formatCurrency(lot.cost)}</td>
                   <td class="calc-cell" data-label="DIARIA ALIMENTAR">${formatCurrency(lot.costPerAnimal)}</td>
@@ -189,7 +196,7 @@ function treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment) {
             .map(
               (row) => `
                 <tr>
-                  <td>${row.name}</td>
+                  <td>${escapeHtml(row.name)}</td>
                   <td>${formatNumber(row.kg)}</td>
                 </tr>
               `,
@@ -208,9 +215,9 @@ function treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment) {
 function defaultPlanTable(plan) {
   const rows = plan.lotRows.flatMap((lot) =>
     lot.treatmentRows.map((treatment) => [
-      lot.pen,
-      lot.lotCode,
-      `${treatment.treatment} (${treatment.time})`,
+      escapeHtml(lot.pen),
+      escapeHtml(lot.lotCode),
+      `${treatment.treatment} (${escapeHtml(treatment.time)})`,
       formatPercent(treatment.sharePct),
       formatNumber(treatment.expectedMo),
       formatNumber(treatment.expectedMs),
@@ -224,7 +231,8 @@ function defaultPlanTable(plan) {
   );
 }
 
-export function feedingScreen(sheet, state, computed) {
+export function feedingScreen(sheet, state, computed, permissionContext = {}) {
+  const { role, dietLocked = false } = permissionContext;
   const diet = state.diets[sheet.dietId];
   const calculatedDiet = computed.diets[sheet.dietId];
   const plan = computed.feedingPlan[sheet.dietId];
@@ -245,11 +253,21 @@ export function feedingScreen(sheet, state, computed) {
               <strong>${treatment.number}° trato</strong>
               <label>
                 <span>Horario</span>
-                <span class="locked-field">${treatment.time}</span>
+                ${valueInput({
+                  value: treatment.time,
+                  type: "text",
+                  onInput: `updateTreatment:${sheet.dietId}:${treatment.number}:time:text`,
+                  disabled: !canEditTreatmentConfig(role, dietLocked),
+                })}
               </label>
               <label>
                 <span>Porcentaje</span>
-                <input type="text" inputmode="decimal" step="0.001" value="${treatment.sharePct}" data-action="updateTreatment:${diet.id}:${treatment.number}:sharePct:percent" />
+                ${valueInput({
+                  value: treatment.sharePct,
+                  type: "percent",
+                  onInput: `updateTreatment:${sheet.dietId}:${treatment.number}:sharePct:percent`,
+                  disabled: !canEditTreatmentConfig(role, dietLocked),
+                })}
               </label>
               ${treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment)}
             </div>
@@ -268,11 +286,11 @@ export function feedingScreen(sheet, state, computed) {
 
   const planTable =
     sheet.id === "ADAPTACION" || sheet.id === "TRANSICION" || sheet.id === "TERMINACION"
-      ? excelPlanTable(state, calculatedDiet, plan)
+      ? excelPlanTable(state, calculatedDiet, plan, permissionContext)
       : defaultPlanTable(plan);
 
   const ingredientRows = calculatedDiet.rows.map((row) => [
-    row.name,
+    escapeHtml(row.name),
     formatPercent(row.normalizedMoPct),
     formatPercent(row.dietDryMatterPct),
     formatCurrency(row.costContributionBsTon),
@@ -280,6 +298,11 @@ export function feedingScreen(sheet, state, computed) {
 
   return `
     ${header}
+    ${
+      dietLocked
+        ? '<div class="lock-banner is-locked"><strong>Dieta bloqueada</strong><span>La configuración de horarios y porcentajes está protegida.</span></div>'
+        : ""
+    }
     ${section("Configuracion de tratos", treatmentInputs)}
     ${metrics}
     ${section("Plan por piquete y trato", planTable)}

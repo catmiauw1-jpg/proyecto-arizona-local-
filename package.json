@@ -4,9 +4,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "node --test tests/history.unit.test.mjs",
-    "test:e2e": "node --test tests/history.e2e.cjs"
+    "dev:phase-d": "node scripts/localPhaseDServer.cjs",
+    "test": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:coverage",
+    "test:unit": "node --test tests/history.unit.test.mjs tests/permissions.unit.test.mjs tests/roles.render.test.mjs",
+    "test:integration": "node --test tests/locks.integration.test.mjs",
+    "test:e2e": "node --test tests/history.e2e.cjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/domain/permissions.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/permissions.unit.test.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.61.1"
