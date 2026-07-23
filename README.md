@@ -46,6 +46,20 @@ Abrir:
 http://127.0.0.1:4173/
 ```
 
+## Validacion local de HISTORIAL
+
+La Fase C incluye pruebas locales repetibles sin Vercel, previews ni despliegues:
+
+```powershell
+npm.cmd install
+npm.cmd test
+```
+
+La prueba E2E levanta un servidor HTTP temporal y usa Microsoft Edge o Google Chrome
+con una implementacion local simulada de Supabase. Valida dos historicos append-only,
+consulta de solo lectura, preservacion del estado operativo y recuperacion tras recarga.
+No modifica autenticacion, permisos, migraciones ni datos remotos.
+
 ## Siguiente paso recomendado
 
 Comparar modulo por modulo contra el Excel:

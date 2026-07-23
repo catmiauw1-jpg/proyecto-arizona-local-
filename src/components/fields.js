@@ -1,12 +1,16 @@
 ﻿import { DIET_LABELS } from "../domain/model.js?v=20260621-stage1-clean-all";
 import { formatCell, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 export function valueInput({ value, type = "text", onInput, options = [] }) {
   if (type === "select") {
     return `
-      <select data-action="${onInput}">
+      <select data-action="${escapeHtml(onInput)}">
         ${options
-          .map((option) => `<option value="${option}" ${option === value ? "selected" : ""}>${option}</option>`)
+          .map(
+            (option) =>
+              `<option value="${escapeHtml(option)}" ${option === value ? "selected" : ""}>${escapeHtml(option)}</option>`,
+          )
           .join("")}
       </select>
     `;
@@ -22,14 +26,14 @@ export function valueInput({ value, type = "text", onInput, options = [] }) {
       type="${inputType}"
       step="${step}"
       ${isNumeric ? 'inputmode="decimal"' : ""}
-      value="${shownValue ?? ""}"
-      data-action="${onInput}"
+      value="${escapeHtml(shownValue ?? "")}"
+      data-action="${escapeHtml(onInput)}"
     />
   `;
 }
 
 export function calculatedCell(value, type) {
-  return `<span class="calculated-value">${formatCell(value, type)}</span>`;
+  return `<span class="calculated-value">${escapeHtml(formatCell(value, type))}</span>`;
 }
 
 export function dietSelect(value, action) {

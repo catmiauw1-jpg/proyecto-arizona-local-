@@ -1,6 +1,7 @@
 ﻿import { formatCurrency, formatNumber, formatPercent } from "../domain/formatters.js?v=20260621-stage1-clean-all";
 import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-all";
 import { simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 export function reportScreen(computed) {
   const totalCost = computed.reportRows.reduce((total, row) => total + row.nutritionalCostLot, 0);
@@ -23,10 +24,10 @@ export function reportScreen(computed) {
   ]);
 
   const rows = computed.reportRows.map((row) => [
-    row.pen,
-    row.currentDiet,
-    row.dietName,
-    row.lotCode,
+    escapeHtml(row.pen),
+    escapeHtml(row.currentDiet),
+    escapeHtml(row.dietName),
+    escapeHtml(row.lotCode),
     row.animalCount,
     formatNumber(row.estimatedWeight),
     formatNumber(row.cmoLot),

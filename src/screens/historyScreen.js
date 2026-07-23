@@ -1,16 +1,8 @@
 import { formatCurrency, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
 import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260621-stage1-clean-all";
 import { simpleTable } from "../components/table.js?v=20260621-stage1-clean-all";
+import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 import { reportScreen } from "./reportScreen.js?v=20260621-stage1-clean-all";
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -79,7 +71,7 @@ function historyTable(snapshots, filters) {
       formatCurrency(summary.totalNutritionalCost ?? 0),
       escapeHtml(String(snapshot.saved_by ?? "").slice(0, 8)),
       escapeHtml(snapshot.snapshot_type ?? ""),
-      `<button type="button" class="secondary-action" data-action="openHistorySnapshot:${snapshot.id}">Ver registro</button>`,
+      `<button type="button" class="secondary-action" data-action="openHistorySnapshot:${escapeHtml(snapshot.id)}">Ver registro</button>`,
     ];
   });
 
@@ -131,7 +123,7 @@ export function historyScreen(historyState) {
 
   const metrics = metricGrid([
     { label: "Historicos", value: historyState.snapshots.length },
-    { label: "Ultima fecha", value: historyState.snapshots[0]?.summary?.workDate ?? "" },
+    { label: "Ultima fecha", value: escapeHtml(historyState.snapshots[0]?.summary?.workDate ?? "") },
     { label: "Ultimo guardado", value: formatDateTime(historyState.snapshots[0]?.saved_at) },
     { label: "Estado", value: historyState.status === "loading" ? "Cargando" : "Listo" },
   ]);

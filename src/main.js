@@ -175,18 +175,19 @@ function cleanStateFromWorkDay(period, workDay) {
     config: {
       clientName: authState.client?.name ?? "Confinamiento Arizona",
       startDate: period?.start_date ?? "",
-      workDate: todayIsoDate(),
+      workDate: workDay?.work_date ?? todayIsoDate(),
     },
   });
 }
 
 function applyLoadedWorkDay({ period, workDay, snapshot }) {
+  const workDate = workDay?.work_date ?? snapshot?.input_state?.config?.workDate ?? todayIsoDate();
   if (snapshot?.input_state) {
     setState({
       ...snapshot.input_state,
       config: {
         ...(snapshot.input_state.config ?? {}),
-        workDate: todayIsoDate(),
+        workDate,
       },
     });
   } else {
@@ -199,7 +200,7 @@ function applyLoadedWorkDay({ period, workDay, snapshot }) {
     historyStatus: "ready",
     period,
     workDay,
-    workDate: getState().config.workDate,
+    workDate,
     lastSavedAt: snapshot?.saved_at ?? workDay?.last_saved_at ?? null,
     message: snapshot ? "Día recuperado correctamente." : "Día activo iniciado sin datos guardados.",
   };
