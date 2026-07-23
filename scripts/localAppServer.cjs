@@ -10,6 +10,7 @@ const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPo
   : 4173;
 const remoteSupabaseModule = "https://esm.sh/@supabase/supabase-js@2.53.0";
 const localSupabaseModule = "/tests/fixtures/supabasePhaseDMock.js";
+const activePhase = process.env.npm_lifecycle_event === "dev:phase-d" ? "Fase D" : "Fase E";
 
 function contentType(filePath) {
   const types = new Map([
@@ -77,7 +78,7 @@ const server = http.createServer((request, response) => {
 
 server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
-    console.error(`El puerto ${port} ya está ocupado. Use: set PORT=4174 && npm.cmd run dev:phase-d`);
+    console.error(`El puerto ${port} ya está ocupado. Use: $env:PORT=4174; npm.cmd run dev:phase-e`);
     process.exitCode = 1;
     return;
   }
@@ -85,7 +86,7 @@ server.on("error", (error) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Fase D local disponible en http://${host}:${port}/`);
+  console.log(`${activePhase} local disponible en http://${host}:${port}/`);
   console.log("Servidor de prueba local: no usa Vercel ni modifica Supabase.");
 });
 

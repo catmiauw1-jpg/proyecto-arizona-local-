@@ -1,3 +1,5 @@
+import { canAccessOperationalModules } from "./license.js";
+
 export const ROLES = Object.freeze({
   ADMIN: "admin_arizona",
   OPERATOR: "operator",
@@ -35,6 +37,11 @@ export function roleLabel(role) {
   if (normalizedRole === ROLES.ADMIN) return "Administrador Arizona";
   if (normalizedRole === ROLES.OPERATOR) return "Operador";
   return "Sin permisos";
+}
+
+export function resolveOperationalRole(role, licenseStatus) {
+  if (!canAccessOperationalModules(licenseStatus)) return null;
+  return normalizeRole(role);
 }
 
 export function isLocalDevelopmentHost(hostname) {

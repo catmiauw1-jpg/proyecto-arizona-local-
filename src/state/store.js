@@ -1,7 +1,7 @@
 ﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260723-phase-d";
 import { calculateState } from "../domain/calculations.js?v=20260621-stage1-clean-all";
 
-import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260723-phase-d";
+import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260723-phase-e";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));

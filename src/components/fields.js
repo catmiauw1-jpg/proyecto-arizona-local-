@@ -1,4 +1,4 @@
-﻿import { DIET_LABELS } from "../domain/model.js?v=20260621-stage1-clean-all";
+﻿import { DIET_LABELS } from "../domain/model.js?v=20260723-phase-e";
 import { formatCell, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 

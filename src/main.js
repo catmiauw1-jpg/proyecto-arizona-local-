@@ -1,12 +1,13 @@
-﻿import { SHEETS } from "./domain/model.js?v=20260621-stage1-clean-all";
+﻿import { SHEETS } from "./domain/model.js?v=20260723-phase-e";
 import { toNumber } from "./domain/formatters.js?v=20260621-stage1-clean-all";
-import { appLayout } from "./components/layout.js?v=20260723-phase-d";
+import { appLayout } from "./components/layout.js?v=20260723-phase-e";
 import { dietScreen } from "./screens/dietScreen.js?v=20260723-phase-d";
 import { feedingScreen } from "./screens/feedingScreen.js?v=20260723-phase-d";
 import { incomeScreen } from "./screens/incomeScreen.js?v=20260723-phase-d";
 import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260723-phase-d";
 import { reportScreen } from "./screens/reportScreen.js?v=20260723-phase-d";
 import { historyScreen } from "./screens/historyScreen.js?v=20260723-phase-d";
+import { licenseScreen } from "./screens/licenseScreen.js?v=20260723-phase-e";
 import { loadingScreen, loginScreen } from "./screens/loginScreen.js?v=20260621-stage1-clean-all";
 import { loadAuthorizedSession, signInWithPassword, signOut } from "./services/authService.js?v=20260621-stage1-clean-all";
 import {
@@ -32,7 +33,19 @@ import {
   updateLot,
   updateTreatment,
 } from "./state/store.js?v=20260723-phase-d";
-
+import {
+  createAuthRuntimeState,
+  createHistoryRuntimeState,
+  createWorkDayRuntimeState,
+} from "./state/runtimeState.js?v=20260723-phase-e";
+import {
+  changeLocalLicenseScenario,
+  getLicenseEvaluation,
+  getLocalLicenseScenario,
+  initializeLocalLicense,
+  licenseAllowsOperations,
+  resetLicenseRuntime,
+} from "./services/localLicenseService.js?v=20260723-phase-e";
 import {
   canEditConsumptionNotes,
   canEditDiet,
@@ -50,45 +63,18 @@ import {
   canViewHistory,
   isLocalDevelopmentHost,
   normalizeRole,
-} from "./domain/permissions.js?v=20260723-phase-d";
+  resolveOperationalRole,
+} from "./domain/permissions.js?v=20260723-phase-e";
 import {
   buildDaySummary,
   buildRegistroHistorySummary,
 } from "./domain/snapshotSummaries.js?v=20260723-phase-d";
-
 const app = document.querySelector("#app");
 const localRoleToolEnabled = isLocalDevelopmentHost(window.location.hostname);
 let localRoleOverride = null;
-let authState = {
-  status: "loading",
-  user: null,
-  profile: null,
-  client: null,
-  error: "",
-  loading: false,
-};
-let workDayState = {
-  status: "idle",
-  saveStatus: "ready",
-  historyStatus: "ready",
-  period: null,
-  workDay: null,
-  workDate: null,
-  lastSavedAt: null,
-  message: "",
-};
-let historyState = {
-  status: "idle",
-  snapshots: [],
-  selectedSnapshot: null,
-  filters: {
-    date: "",
-    pen: "",
-    lot: "",
-    diet: "",
-  },
-  message: "",
-};
+let authState = createAuthRuntimeState();
+let workDayState = createWorkDayRuntimeState();
+let historyState = createHistoryRuntimeState();
 
 function todayIsoDate() {
   const now = new Date();
@@ -118,14 +104,18 @@ function activeRole() {
 }
 
 function buildPermissionContext(state, sheet = findSheet()) {
+  const license = getLicenseEvaluation();
   return {
-    role: activeRole(),
+    role: resolveOperationalRole(activeRole(), license.status),
+    authenticatedRole: activeRole(),
+    license,
     initialDataLocked: state.accessControl.initialDataLocked,
     dietLocked: sheet.dietId ? state.accessControl.dietLocks[sheet.dietId] === true : false,
   };
 }
 
 function routeContent(sheet, state, computed, permissionContext) {
+  if (sheet.kind === "license") return licenseScreen(permissionContext.license);
   if (sheet.id === "Ingreso") return incomeScreen(state, computed, permissionContext);
   if (sheet.kind === "diet") return dietScreen(sheet, state, computed, permissionContext);
   if (sheet.kind === "feeding") return feedingScreen(sheet, state, computed, permissionContext);
@@ -244,9 +234,11 @@ function render() {
       },
     },
     roleContext: {
-      role: permissionContext.role,
+      role: permissionContext.authenticatedRole,
       localToolEnabled: localRoleToolEnabled,
+      licenseScenario: getLocalLicenseScenario(),
     },
+    licenseContext: permissionContext.license,
   });
 }
 
@@ -254,6 +246,14 @@ function rejectUnauthorizedChange() {
   workDayState = {
     ...workDayState,
     message: "Acción no permitida para el rol activo.",
+  };
+  render();
+}
+
+function rejectLicenseChange() {
+  workDayState = {
+    ...workDayState,
+    message: getLicenseEvaluation().message || "La licencia no permite realizar esta acción.",
   };
   render();
 }
@@ -279,6 +279,27 @@ function handleCommit(event) {
     }
     localRoleOverride = nextRole;
     render();
+    return;
+  }
+
+  if (command === "setLocalLicenseScenario") {
+    const result = changeLocalLicenseScenario(event.target.value, {
+      clientName: authState.client?.name,
+      localToolEnabled: localRoleToolEnabled,
+    });
+    if (!result.changed) {
+      rejectUnauthorizedChange();
+      return;
+    }
+
+    historyState = { ...historyState, selectedSnapshot: null };
+    if (!result.evaluation.operationalAccess) window.location.hash = "#/LICENCIA";
+    render();
+    return;
+  }
+
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
     return;
   }
 
@@ -373,8 +394,35 @@ function handleKeyDown(event) {
   event.preventDefault();
   handleCommit(event);
 }
+
+function handleSignOut() {
+  localRoleOverride = null;
+  resetLicenseRuntime();
+  authState = { ...authState, status: "loading" };
+  workDayState = createWorkDayRuntimeState();
+  historyState = createHistoryRuntimeState();
+  render();
+  signOut()
+    .catch(() => {})
+    .finally(() => {
+      resetState();
+      authState = createAuthRuntimeState({ status: "signedOut" });
+      render();
+    });
+}
+
 function handleClick(event) {
   const action = event.target?.closest("[data-action]")?.dataset?.action;
+  if (!action || ["setLocalRole", "setLocalLicenseScenario"].includes(action)) return;
+  if (action === "authSignOut") {
+    handleSignOut();
+    return;
+  }
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return;
+  }
+
   const role = activeRole();
 
   if (action === "applyConsumptionFromCalculated") {
@@ -457,35 +505,6 @@ function handleClick(event) {
     return;
   }
 
-  if (action === "authSignOut") {
-    localRoleOverride = null;
-    authState = { ...authState, status: "loading" };
-    workDayState = {
-      status: "idle",
-      saveStatus: "ready",
-      historyStatus: "ready",
-      period: null,
-      workDay: null,
-      workDate: null,
-      lastSavedAt: null,
-      message: "",
-    };
-    historyState = {
-      status: "idle",
-      snapshots: [],
-      selectedSnapshot: null,
-      filters: { date: "", pen: "", lot: "", diet: "" },
-      message: "",
-    };
-    render();
-    signOut()
-      .catch(() => {})
-      .finally(() => {
-        resetState();
-        authState = { status: "signedOut", user: null, profile: null, client: null, error: "" };
-        render();
-      });
-  }
 }
 
 function handleHistoryFilter(event) {
@@ -503,6 +522,10 @@ function handleHistoryFilter(event) {
 }
 
 async function handleSaveWorkDay(successMessage = "Guardado correctamente.") {
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return false;
+  }
   if (workDayState.saveStatus === "saving") return false;
   if (!workDayState.workDay?.id) {
     workDayState = {
@@ -554,6 +577,10 @@ async function handleSaveWorkDay(successMessage = "Guardado correctamente.") {
 }
 
 async function handleInitialDataLock(locked) {
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return;
+  }
   const state = getState();
   const role = activeRole();
   const currentlyLocked = state.accessControl.initialDataLocked;
@@ -585,6 +612,10 @@ async function handleInitialDataLock(locked) {
 }
 
 async function handleDietLock(dietId, locked) {
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return;
+  }
   const state = getState();
   const role = activeRole();
   const currentlyLocked = state.accessControl.dietLocks[dietId];
@@ -614,6 +645,10 @@ async function handleDietLock(dietId, locked) {
 }
 
 async function handleSaveRegistroHistory() {
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return;
+  }
   if (workDayState.historyStatus === "saving") return;
   if (!workDayState.workDay?.id) {
     workDayState = {
@@ -661,6 +696,10 @@ async function handleSaveRegistroHistory() {
 }
 
 async function handleLoadHistory() {
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return;
+  }
   if (historyState.status === "loading") return;
 
   historyState = { ...historyState, status: "loading", message: "" };
@@ -701,7 +740,12 @@ async function handleLoginSubmit(event) {
   try {
     authState = await signInWithPassword(email, password);
     if (authState.status === "authorized") {
+      initializeLocalLicense({
+        clientName: authState.client?.name,
+        localToolEnabled: localRoleToolEnabled,
+      });
       await initializeWorkDay();
+      if (!licenseAllowsOperations()) window.location.hash = "#/LICENCIA";
       return;
     }
   } catch (error) {
@@ -722,7 +766,12 @@ async function initializeAuth() {
   try {
     authState = await loadAuthorizedSession();
     if (authState.status === "authorized") {
+      initializeLocalLicense({
+        clientName: authState.client?.name,
+        localToolEnabled: localRoleToolEnabled,
+      });
       await initializeWorkDay();
+      if (!licenseAllowsOperations()) window.location.hash = "#/LICENCIA";
       return;
     }
   } catch (error) {
@@ -748,11 +797,3 @@ subscribe(render);
 
 render();
 initializeAuth();
-
-
-
-
-
-
-
-

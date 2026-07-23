@@ -368,7 +368,7 @@ test("validates append-only history, read-only consultation and reload locally",
   assert.equal(
     await page
       .locator(
-        "main.workspace input, main.workspace select:not([data-action='setLocalRole']), main.workspace textarea",
+        "main.workspace input, main.workspace select:not([data-action='setLocalRole']):not([data-action='setLocalLicenseScenario']), main.workspace textarea",
       )
       .count(),
     0,
@@ -587,6 +587,125 @@ test("validates local roles, persistent locks and protected handlers", { timeout
   assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), true);
   await page.getByRole("link", { name: "ADAPT", exact: true }).click();
   assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), true);
+
+  const visibleText = await page.locator("body").innerText();
+  assert.doesNotMatch(visibleText, /\b(?:NaN|Infinity|undefined)\b/);
+  assert.deepEqual(unexpectedRequests, []);
+  assert.deepEqual(consoleErrors, []);
+  assert.deepEqual(pageErrors, []);
+});
+
+test("validates every local license state without mutating operational data", { timeout: 60_000 }, async (t) => {
+  const executablePath = findBrowserExecutable();
+  assert.ok(executablePath, "Se requiere Microsoft Edge o Google Chrome para la prueba local.");
+
+  const server = createLocalServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const origin = `http://127.0.0.1:${address.port}`;
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const unexpectedRequests = [];
+  const consoleErrors = [];
+  const pageErrors = [];
+
+  t.after(async () => {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  await context.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (url === "https://esm.sh/@supabase/supabase-js@2.53.0") {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/javascript; charset=utf-8",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: supabaseMockModule,
+      });
+      return;
+    }
+    if (url.startsWith(origin)) {
+      await route.continue();
+      return;
+    }
+    unexpectedRequests.push(url);
+    await route.abort();
+  });
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto(origin, { waitUntil: "domcontentloaded" });
+  await page.getByText("Ingreso de lotes y calculo inicial").waitFor();
+  const roleSelector = page.locator('[data-action="setLocalRole"]');
+  const licenseSelector = page.locator('[data-action="setLocalLicenseScenario"]');
+  await roleSelector.selectOption("admin_arizona");
+  assert.equal(await licenseSelector.inputValue(), "active");
+
+  await updateField(page, "updateLot:lot-1:lotCode:text", "LICENCIA-DATO");
+  await updateField(page, "updateLot:lot-1:animalCount:number", "15");
+  await page.locator('[data-action="updateLot:lot-1:currentDiet:select"]').selectOption("ADAPTACION");
+  await page.locator('[data-action="saveWorkDay"]').click();
+  await page.getByText("Guardado correctamente.").waitFor();
+  await page.locator('[data-action="saveRegistroHistory"]').click();
+  await page.waitForFunction(() => {
+    const database = JSON.parse(localStorage.getItem("__arizona_history_validation__"));
+    return database.snapshots.some((snapshot) => snapshot.snapshot_type === "registro_history");
+  });
+  const databaseBeforeLicenseTests = await readMockDatabase(page);
+
+  await licenseSelector.selectOption("expiring");
+  await page.getByText("La licencia está próxima a vencer.", { exact: true }).first().waitFor();
+  assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 1);
+  await page.getByRole("link", { name: "LICENCIA", exact: true }).click();
+  assert.match(await page.locator("main.workspace").innerText(), /Días restantes\s+3/);
+
+  await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("expired");
+  await page.getByRole("heading", { name: "Licencia", exact: true }).waitFor();
+  assert.match(await page.locator("main.workspace").innerText(), /Licencia vencida\. Contacte al administrador\./);
+  assert.equal(await page.locator('[data-action="authSignOut"]').count(), 1);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { name: "Licencia", exact: true }).waitFor();
+  assert.match(await page.locator("main.workspace").innerText(), /Vencida/);
+
+  await page.getByRole("link", { name: "Ingreso", exact: true }).click();
+  const lotCodeInput = page.locator('[data-action="updateLot:lot-1:lotCode:text"]');
+  assert.equal(await lotCodeInput.inputValue(), "LICENCIA-DATO");
+  assert.equal(await lotCodeInput.isDisabled(), true);
+  assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 0);
+  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+
+  await page.evaluate(() => {
+    const input = document.querySelector('[data-action="updateLot:lot-1:lotCode:text"]');
+    input.disabled = false;
+    input.value = "NO-DEBE-GUARDARSE";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.getByText("Licencia vencida. Contacte al administrador.", { exact: true }).first().waitFor();
+  assert.equal(await lotCodeInput.inputValue(), "LICENCIA-DATO");
+  assert.deepEqual(await readMockDatabase(page), databaseBeforeLicenseTests);
+
+  await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("blocked");
+  await page.getByRole("heading", { name: "Licencia", exact: true }).waitFor();
+  assert.match(await page.locator("main.workspace").innerText(), /Licencia bloqueada\. Contacte al administrador\./);
+
+  await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("unconfigured");
+  assert.match(await page.locator("main.workspace").innerText(), /Licencia no configurada\. Contacte al administrador\./);
+  assert.deepEqual(await readMockDatabase(page), databaseBeforeLicenseTests);
+
+  await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("active");
+  await page.getByRole("link", { name: "Ingreso", exact: true }).click();
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').inputValue(), "LICENCIA-DATO");
+  assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 1);
+
+  await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("expired");
+  await page.locator('[data-action="authSignOut"]').click();
+  await page.getByRole("heading", { name: "Iniciar sesion", exact: true }).waitFor();
+  assert.deepEqual(await readMockDatabase(page), databaseBeforeLicenseTests);
 
   const visibleText = await page.locator("body").innerText();
   assert.doesNotMatch(visibleText, /\b(?:NaN|Infinity|undefined)\b/);

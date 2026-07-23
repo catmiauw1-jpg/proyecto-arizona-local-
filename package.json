@@ -4,12 +4,13 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev:phase-d": "node scripts/localPhaseDServer.cjs",
+    "dev:phase-d": "node scripts/localAppServer.cjs",
+    "dev:phase-e": "node scripts/localAppServer.cjs",
     "test": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:coverage",
-    "test:unit": "node --test tests/history.unit.test.mjs tests/permissions.unit.test.mjs tests/roles.render.test.mjs",
-    "test:integration": "node --test tests/locks.integration.test.mjs",
+    "test:unit": "node --test tests/history.unit.test.mjs tests/permissions.unit.test.mjs tests/roles.render.test.mjs tests/license.unit.test.mjs tests/license.render.test.mjs tests/moduleVersions.unit.test.mjs",
+    "test:integration": "node --test tests/locks.integration.test.mjs tests/license.integration.test.mjs",
     "test:e2e": "node --test tests/history.e2e.cjs",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/domain/permissions.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/permissions.unit.test.mjs"
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/domain/permissions.js --test-coverage-include=src/domain/license.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/permissions.unit.test.mjs tests/license.unit.test.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.61.1"

@@ -1,6 +1,10 @@
-﻿import { SHEETS } from "../domain/model.js?v=20260621-stage1-clean-all";
+﻿import { SHEETS } from "../domain/model.js?v=20260723-phase-e";
 
-import { ROLES, roleLabel } from "../domain/permissions.js?v=20260723-phase-d";
+import {
+  LICENSE_STATUSES,
+  LOCAL_LICENSE_SCENARIOS,
+} from "../domain/license.js?v=20260723-phase-e";
+import { ROLES, roleLabel } from "../domain/permissions.js?v=20260723-phase-e";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 function formatDateTime(value) {
@@ -70,7 +74,7 @@ function dayStatusBar(workDayContext) {
   `;
 }
 
-function localRoleTool(roleContext) {
+function localDevelopmentTool(roleContext) {
   if (!roleContext?.localToolEnabled) return "";
 
   return `
@@ -87,7 +91,33 @@ function localRoleTool(roleContext) {
           </option>
         </select>
       </label>
+      <label>
+        <span>Escenario de licencia</span>
+        <select data-action="setLocalLicenseScenario">
+          <option value="${LOCAL_LICENSE_SCENARIOS.ACTIVE}" ${roleContext.licenseScenario === LOCAL_LICENSE_SCENARIOS.ACTIVE ? "selected" : ""}>Activa</option>
+          <option value="${LOCAL_LICENSE_SCENARIOS.EXPIRING}" ${roleContext.licenseScenario === LOCAL_LICENSE_SCENARIOS.EXPIRING ? "selected" : ""}>Próxima a vencer</option>
+          <option value="${LOCAL_LICENSE_SCENARIOS.EXPIRED}" ${roleContext.licenseScenario === LOCAL_LICENSE_SCENARIOS.EXPIRED ? "selected" : ""}>Vencida</option>
+          <option value="${LOCAL_LICENSE_SCENARIOS.BLOCKED}" ${roleContext.licenseScenario === LOCAL_LICENSE_SCENARIOS.BLOCKED ? "selected" : ""}>Bloqueada</option>
+          <option value="${LOCAL_LICENSE_SCENARIOS.UNCONFIGURED}" ${roleContext.licenseScenario === LOCAL_LICENSE_SCENARIOS.UNCONFIGURED ? "selected" : ""}>No configurada</option>
+        </select>
+      </label>
       <span>No forma parte de la interfaz final.</span>
+    </div>
+  `;
+}
+
+function licenseNotice(licenseContext, activeSheet) {
+  if (!licenseContext?.message) return "";
+
+  const expiring = licenseContext.status === LICENSE_STATUSES.EXPIRING;
+  const title = expiring ? "Licencia próxima a vencer" : `Licencia ${licenseContext.status.toLowerCase()}`;
+  return `
+    <div class="license-notice ${expiring ? "is-warning" : "is-blocked"}" role="status">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(licenseContext.message)}</span>
+      </div>
+      ${activeSheet === "LICENCIA" ? "" : '<a class="secondary-action" href="#/LICENCIA">Ver licencia</a>'}
     </div>
   `;
 }
@@ -98,6 +128,7 @@ export function appLayout({
   sessionContext = null,
   workDayContext = null,
   roleContext = null,
+  licenseContext = null,
 }) {
   const userEmail = sessionContext?.user?.email ?? "";
   const clientName = sessionContext?.client?.name ?? "";
@@ -136,8 +167,9 @@ export function appLayout({
         }
       </aside>
       <main class="workspace">
-        ${localRoleTool(roleContext)}
-        ${dayStatusBar(workDayContext)}
+        ${localDevelopmentTool(roleContext)}
+        ${licenseNotice(licenseContext, activeSheet)}
+        ${activeSheet === "LICENCIA" ? "" : dayStatusBar(workDayContext)}
         ${content}
       </main>
     </div>

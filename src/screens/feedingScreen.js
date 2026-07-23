@@ -1,12 +1,12 @@
 import { valueInput } from "../components/fields.js?v=20260723-phase-d";
-import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-d";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-e";
 import { simpleTable } from "../components/table.js?v=20260723-phase-d";
 import { formatCurrency, formatNumber, formatPercent, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
 
 import {
   canEditFeedingActuals,
   canEditTreatmentConfig,
-} from "../domain/permissions.js?v=20260723-phase-d";
+} from "../domain/permissions.js?v=20260723-phase-e";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 function feedingActualValue(state, dietId, lotId, treatment) {

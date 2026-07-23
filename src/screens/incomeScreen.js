@@ -1,6 +1,6 @@
-﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-all";
+﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260723-phase-e";
 import { formatCell, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-d";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-e";
 import { dataTable, simpleTable } from "../components/table.js?v=20260723-phase-d";
 
 import {
@@ -8,7 +8,7 @@ import {
   canEditLotField,
   canLockInitialData,
   canUnlockInitialData,
-} from "../domain/permissions.js?v=20260723-phase-d";
+} from "../domain/permissions.js?v=20260723-phase-e";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 import { valueInput } from "../components/fields.js?v=20260723-phase-d";
 

@@ -1,6 +1,6 @@
-﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260621-stage1-clean-all";
+﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260723-phase-e";
 import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-d";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-e";
 import { dataTable, simpleTable } from "../components/table.js?v=20260723-phase-d";
 
 const EXCEL_DIET_COLUMNS = [
@@ -17,7 +17,7 @@ import {
   canEditDiet,
   canLockDiet,
   canUnlockDiet,
-} from "../domain/permissions.js?v=20260723-phase-d";
+} from "../domain/permissions.js?v=20260723-phase-e";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 export function dietScreen(sheet, state, computed, permissionContext = {}) {
