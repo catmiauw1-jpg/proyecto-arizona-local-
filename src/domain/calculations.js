@@ -9,6 +9,37 @@ function safeDivide(numerator, denominator) {
   return divisor === 0 ? 0 : toNumber(numerator) / divisor;
 }
 
+function percentFraction(value) {
+  const number = toNumber(value);
+  return Math.abs(number) > 1 ? number / 100 : number;
+}
+
+export function calculateTreatmentIngredientLoads(calculatedDiet, dietTotalMo, treatment) {
+  return calculatedDiet.rows.map((ingredient) => ({
+    ingredientId: ingredient.id,
+    name: ingredient.name,
+    kg:
+      toNumber(dietTotalMo) *
+      toNumber(ingredient.normalizedMoPct) *
+      percentFraction(treatment.sharePct),
+  }));
+}
+
+export function calculateFifthTreatmentBalance(expectedByTreatment, manualActuals) {
+  const expectedTotal = [1, 2, 3, 4, 5].reduce(
+    (total, number) => total + toNumber(expectedByTreatment[number]?.expectedMo),
+    0,
+  );
+  const realizedBeforeFifth = [1, 2, 3, 4].reduce(
+    (total, number) =>
+      total +
+      toNumber(manualActuals[number] ?? expectedByTreatment[number]?.expectedMo),
+    0,
+  );
+
+  return expectedTotal - realizedBeforeFifth;
+}
+
 function isCompletePercent(value) {
   const number = toNumber(value);
   return number <= 1.01 ? number >= 0.999 : number >= 99.9;
@@ -27,8 +58,8 @@ export function hasOperationalLot(lot) {
 
 export function calculateDiet(diet) {
   const rawRows = diet.ingredients.map((ingredient) => {
-    const dryMatterPct = toNumber(ingredient.dryMatterPct);
-    const inclusionMsPct = toNumber(ingredient.inclusionMsPct);
+    const dryMatterPct = percentFraction(ingredient.dryMatterPct);
+    const inclusionMsPct = percentFraction(ingredient.inclusionMsPct);
     const inclusionMoPct = safeDivide(inclusionMsPct, dryMatterPct);
 
     return {
@@ -65,7 +96,9 @@ export function calculateDiet(diet) {
 
   totals.costBsKg = totals.costBsTon / 1000;
   totals.status = isCompletePercent(totalInclusionMsPct) ? "Correcto" : "Incorrecto";
-  totals.treatmentSharePct = sum(diet.treatments, (treatment) => treatment.sharePct);
+  totals.treatmentSharePct = sum(diet.treatments, (treatment) =>
+    percentFraction(treatment.sharePct),
+  );
   totals.treatmentAb2 = totals.treatmentSharePct;
   totals.treatmentAb3Basis = totals.treatmentSharePct;
   totals.treatmentStatus = isCompletePercent(totals.treatmentAb3Basis) ? "Correcto" : "Incorrecto";
@@ -87,12 +120,15 @@ export function calculateLots(state, calculatedDiets) {
     const consumption = state.consumptionNotes[lot.id] ?? {};
     const daysInConfinement = dateDiffInDays(workDate, lot.entryDate);
     const estimatedWeight = toNumber(lot.initialWeight) + daysInConfinement * toNumber(lot.estimatedGmd);
-    const initialCmsKg = toNumber(lot.initialWeight) * toNumber(lot.initialImsPct) * toNumber(lot.animalCount);
+    const initialImsPct = percentFraction(lot.initialImsPct);
+    const consumptionAdjustmentPct = percentFraction(lot.consumptionAdjustmentPct);
+    const initialCmsKg =
+      toNumber(lot.initialWeight) * initialImsPct * toNumber(lot.animalCount);
     const baseTotalMs =
       estimatedWeight *
       toNumber(lot.animalCount) *
-      toNumber(lot.initialImsPct) *
-      (1 + toNumber(lot.consumptionAdjustmentPct));
+      initialImsPct *
+      (1 + consumptionAdjustmentPct);
     const totalFeedMs =
       baseTotalMs -
       toNumber(consumption.msPlannedManual) +
@@ -105,6 +141,8 @@ export function calculateLots(state, calculatedDiets) {
 
     return {
       ...lot,
+      initialImsPct,
+      consumptionAdjustmentPct,
       daysInConfinement,
       estimatedWeight,
       initialCmsKg,
@@ -137,12 +175,19 @@ export function calculateFeedingPlan(state, calculatedDiets, calculatedLots) {
   const planByDiet = {};
 
   Object.values(calculatedDiets).forEach((diet) => {
-    const dietLots = calculatedLots.filter((lot) => lot.currentDiet === diet.id);
-    const lotRows = dietLots.map((lot) => {
+    const lotRows = calculatedLots.map((lot) => {
+      const expectedLotMo =
+        lot.currentDiet === diet.id ? toNumber(lot.totalFeedMo) : 0;
       const treatmentRows = diet.treatments.map((treatment) => {
-        const expectedMo = lot.totalFeedMo * toNumber(treatment.sharePct);
+        const expectedMo =
+          expectedLotMo * percentFraction(treatment.sharePct);
         const expectedMs = expectedMo * diet.totals.dietDryMatterPct;
-        const cost = expectedMo * diet.totals.costBsKg;
+        const storedActual =
+          state.feedingActuals?.[diet.id]?.[lot.id]?.[treatment.number];
+        const realizedMo = storedActual ?? expectedMo;
+        const realizedMs =
+          toNumber(realizedMo) * diet.totals.dietDryMatterPct;
+        const cost = toNumber(realizedMo) * diet.totals.costBsKg;
 
         return {
           treatment: treatment.number,
@@ -150,8 +195,8 @@ export function calculateFeedingPlan(state, calculatedDiets, calculatedLots) {
           sharePct: treatment.sharePct,
           expectedMo,
           expectedMs,
-          realizedMo: expectedMo,
-          realizedMs: expectedMs,
+          realizedMo,
+          realizedMs,
           cost,
         };
       });
@@ -189,31 +234,15 @@ export function calculateFeedingPlan(state, calculatedDiets, calculatedLots) {
 
 function calculateLotRealizedFromActuals(state, diet, plan, lotRow) {
   const dietDryMatter = diet?.totals.dietDryMatterPct ?? 0;
-  const expectedByTreatment = Object.fromEntries(
-    lotRow.treatmentRows.map((treatment) => [treatment.treatment, treatment]),
-  );
   const manualActuals = Object.fromEntries(
     [1, 2, 3, 4, 5].map((number) => [
       number,
       state.feedingActuals?.[plan.dietId]?.[lotRow.lotId]?.[number],
     ]),
   );
-  const realEspeTrato5 =
-    toNumber(expectedByTreatment[1]?.expectedMo) +
-    toNumber(expectedByTreatment[2]?.expectedMo) +
-    toNumber(expectedByTreatment[4]?.expectedMo) +
-    toNumber(expectedByTreatment[5]?.expectedMo) -
-    (toNumber(manualActuals[4] ?? expectedByTreatment[4]?.expectedMo) +
-      toNumber(manualActuals[2] ?? expectedByTreatment[2]?.expectedMo) +
-      toNumber(manualActuals[1] ?? expectedByTreatment[1]?.expectedMo));
   const realizedMo = lotRow.treatmentRows.reduce((total, treatment) => {
     const storedActual = manualActuals[treatment.treatment];
-    const fallbackActual =
-      ["TRANSICION", "TERMINACION"].includes(plan.dietId) && treatment.treatment === 5
-        ? realEspeTrato5
-        : treatment.expectedMo;
-
-    return total + toNumber(storedActual ?? fallbackActual);
+    return total + toNumber(storedActual ?? treatment.expectedMo);
   }, 0);
 
   return {
@@ -295,7 +324,63 @@ function costPerAnimalFromModules(feedingPlan, lotId) {
   }, 0);
 }
 
-export function calculateReportRows(calculatedLots, consumptionRows, feedingPlan, calculatedDiets) {
+export function recalculateReportRow(row, editedKey) {
+  const next = { ...row };
+
+  if (["cmoLot", "animalCount"].includes(editedKey)) {
+    next.cmoAnimal = safeDivide(next.cmoLot, next.animalCount);
+  }
+  if (["cmsLot", "animalCount"].includes(editedKey)) {
+    next.cmsAnimal = safeDivide(next.cmsLot, next.animalCount);
+  }
+  if (
+    ["cmsLot", "cmsAnimal", "animalCount", "estimatedWeight"].includes(
+      editedKey,
+    )
+  ) {
+    next.imsPct = safeDivide(next.cmsAnimal, next.estimatedWeight);
+  }
+  if (["nutritionalCostAnimal", "animalCount"].includes(editedKey)) {
+    next.nutritionalCostLot =
+      toNumber(next.nutritionalCostAnimal) * toNumber(next.animalCount);
+  }
+
+  next.financialAverage = toNumber(next.nutritionalCostAnimal);
+  next.financialTotal = toNumber(next.nutritionalCostLot);
+  return next;
+}
+
+function applyReportOverride(row, override = {}) {
+  const merged = { ...row, ...override };
+  if (!Object.hasOwn(override, "cmoAnimal")) {
+    merged.cmoAnimal = safeDivide(merged.cmoLot, merged.animalCount);
+  }
+  if (!Object.hasOwn(override, "cmsAnimal")) {
+    merged.cmsAnimal = safeDivide(merged.cmsLot, merged.animalCount);
+  }
+  if (!Object.hasOwn(override, "imsPct")) {
+    merged.imsPct = safeDivide(merged.cmsAnimal, merged.estimatedWeight);
+  }
+  if (!Object.hasOwn(override, "nutritionalCostLot")) {
+    merged.nutritionalCostLot =
+      toNumber(merged.nutritionalCostAnimal) * toNumber(merged.animalCount);
+  }
+  if (!Object.hasOwn(override, "financialAverage")) {
+    merged.financialAverage = toNumber(merged.nutritionalCostAnimal);
+  }
+  if (!Object.hasOwn(override, "financialTotal")) {
+    merged.financialTotal = toNumber(merged.nutritionalCostLot);
+  }
+  return merged;
+}
+
+export function calculateReportRows(
+  calculatedLots,
+  consumptionRows,
+  feedingPlan,
+  calculatedDiets,
+  reportOverrides = {},
+) {
   return calculatedLots.map((lot) => {
     const consumption = consumptionRows.find((row) => row.lotId === lot.id);
     const cmoLot = toNumber(consumption?.moRealizedManual);
@@ -306,7 +391,8 @@ export function calculateReportRows(calculatedLots, consumptionRows, feedingPlan
     const nutritionalCostAnimal = costPerAnimalFromModules(feedingPlan, lot.id);
     const nutritionalCostLot = nutritionalCostAnimal * toNumber(lot.animalCount);
 
-    return {
+    const row = {
+      lotId: lot.id,
       pen: lot.pen,
       currentDiet: lot.currentDiet,
       dietName: calculatedDiets[lot.currentDiet]?.title ?? "",
@@ -323,6 +409,8 @@ export function calculateReportRows(calculatedLots, consumptionRows, feedingPlan
       financialAverage: nutritionalCostAnimal,
       financialTotal: nutritionalCostLot,
     };
+
+    return applyReportOverride(row, reportOverrides?.[lot.id]);
   });
 }
 
@@ -332,7 +420,13 @@ export function calculateState(state) {
   const dietTotals = calculateDietTotals(lots);
   const feedingPlan = calculateFeedingPlan(state, diets, lots);
   const consumptionRows = calculateConsumptionRows(state, lots, diets, feedingPlan);
-  const reportRows = calculateReportRows(lots, consumptionRows, feedingPlan, diets);
+  const reportRows = calculateReportRows(
+    lots,
+    consumptionRows,
+    feedingPlan,
+    diets,
+    state.reportOverrides,
+  );
 
   return {
     diets,

@@ -124,40 +124,6 @@ button {
   color: var(--green-dark);
 }
 
-.session-card {
-  display: grid;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-soft);
-}
-
-.session-card span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.session-card strong {
-  overflow: hidden;
-  color: var(--ink);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-card button {
-  min-height: 34px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: #ffffff;
-  color: var(--green-dark);
-  font-weight: 800;
-}
-
 .workspace {
   min-width: 0;
   padding: 24px;
@@ -195,45 +161,6 @@ button {
   background: #ffffff;
 }
 
-.day-status-bar {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto auto;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 18px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-}
-
-.day-status-bar div {
-  display: grid;
-  gap: 3px;
-}
-
-.day-status-bar span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.day-status-bar strong {
-  font-size: 13px;
-}
-
-.day-status-bar button {
-  min-height: 36px;
-  border: 1px solid #bad2c7;
-  border-radius: 6px;
-  padding: 8px 12px;
-  background: var(--green);
-  color: #ffffff;
-  font-weight: 800;
-}
-
 .secondary-action {
   display: inline-flex;
   align-items: center;
@@ -252,19 +179,10 @@ button {
   background: var(--panel-soft);
 }
 
-.day-status-bar .secondary-action {
-  border-color: var(--line-strong);
-  background: #ffffff;
-  color: var(--green-dark);
-}
-
-.day-status-bar button:disabled {
-  cursor: progress;
-  opacity: 0.7;
-}
-
-.day-status-bar p {
-  grid-column: 1 / -1;
+.work-day-feedback {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--green);
   color: var(--muted);
   font-size: 13px;
 }
@@ -979,27 +897,76 @@ th:last-child {
   color: var(--amber);
 }
 
-.treatment-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(160px, 1fr));
-  gap: 12px;
+.excel-treatment-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line-strong);
+  background: #d8dce0;
 }
 
-.treatment-row {
+.excel-treatment-board {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel-soft);
+  grid-template-columns: repeat(4, minmax(260px, 1fr)) minmax(700px, 2.5fr);
+  min-width: 1740px;
+  gap: 1px;
+  align-items: stretch;
 }
 
-.treatment-row strong {
-  color: var(--green-dark);
+.excel-treatment-column {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-width: 260px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.excel-treatment-column.is-fifth {
+  min-width: 700px;
+}
+
+.excel-treatment-column h3 {
+  margin: 0;
+  padding: 6px 10px;
+  background: #002060;
+  color: #ffffff;
+  font-size: 12px;
+  text-align: center;
+}
+
+.treatment-configuration {
+  display: grid;
+  min-width: 0;
+  min-height: 430px;
+  align-content: start;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  background: #fbfbfa;
+}
+
+.excel-treatment-column.is-fifth .treatment-configuration {
+  width: 280px;
+  border-right: 1px solid var(--line);
+}
+
+.treatment-configuration label {
+  gap: 3px;
+}
+
+.treatment-configuration input {
+  min-height: 28px;
+  border-radius: 2px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.treatment-share-field input:not(:disabled) {
+  background: #ffff00;
+  font-weight: 700;
 }
 
 .treatment-loads {
   display: grid;
+  min-width: 0;
   gap: 6px;
   padding-top: 4px;
   border-top: 1px solid var(--line);
@@ -1014,23 +981,295 @@ th:last-child {
 
 .treatment-loads table {
   width: 100%;
+  min-width: 0;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 11px;
 }
 
+.treatment-loads th {
+  min-width: 0;
+  padding: 4px;
+  background: #e5eee9;
+  color: #29453a;
+  font-size: 9px;
+  line-height: 1.15;
+  text-align: right;
+  white-space: normal;
+}
+
+.treatment-loads th:first-child {
+  text-align: left;
+}
+
 .treatment-loads td {
+  min-width: 0;
   padding: 4px 0;
   border-bottom: 1px solid rgba(40, 56, 78, 0.08);
+  border-right: 0;
+}
+
+.treatment-loads td:first-child {
+  overflow: hidden;
+  padding-right: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treatment-loads th:nth-child(2),
+.treatment-loads td:nth-child(2) {
+  width: 72px;
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .treatment-loads td:last-child {
+  width: 82px;
   text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.treatment-loads input {
+  min-height: 28px;
+  padding: 3px 5px;
+  border-radius: 3px;
+  text-align: right;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .treatment-loads .total-row td {
   border-bottom: 0;
   color: var(--green-dark);
+}
+
+.treatment-piquete-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-top: 8px solid #ffffff;
+  font-size: 10px;
+}
+
+.treatment-piquete-table th,
+.treatment-piquete-table td {
+  position: static;
+  min-width: 0;
+  height: 26px;
+  overflow: hidden;
+  padding: 3px 4px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treatment-piquete-table th:first-child,
+.treatment-piquete-table td:first-child {
+  text-align: center;
+}
+
+.treatment-piquete-table th {
+  height: 40px;
+  background: #002060;
+  color: #ffffff;
+  font-size: 9px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+}
+
+.treatment-piquete-table .input-head {
+  background: #002060;
+}
+
+.excel-realized-cell {
+  padding: 0 !important;
+  background: #fff0a3;
+}
+
+.excel-realized-cell input {
+  min-height: 25px;
+  border: 0;
+  border-radius: 0;
+  padding: 2px 4px;
+  background: #fff0a3;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.excel-realized-cell input:focus {
+  outline: 2px solid #217346;
+  outline-offset: -2px;
+}
+
+.excel-realized-cell input:disabled {
+  background: var(--locked);
+  font-weight: 600;
+}
+
+.adaptation-treatment-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.adaptation-treatment-tab {
+  display: grid;
+  min-width: 148px;
+  min-height: 58px;
+  flex: 1 0 148px;
+  align-content: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f7f8f6;
+  color: var(--ink);
+  text-align: left;
+}
+
+.adaptation-treatment-tab span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.adaptation-treatment-tab small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.adaptation-treatment-tab:hover {
+  border-color: var(--green);
+  background: #edf4f0;
+}
+
+.adaptation-treatment-tab.is-active {
+  border-color: var(--green-dark);
+  background: var(--green-dark);
+  color: #ffffff;
+}
+
+.adaptation-treatment-tab.is-active small {
+  color: #dbeae3;
+}
+
+.adaptation-treatment-panels {
+  margin-top: 14px;
+}
+
+.adaptation-treatment-panel[hidden] {
+  display: none;
+}
+
+.adaptation-treatment-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.adaptation-treatment-setup,
+.adaptation-piquete-area {
+  min-width: 0;
+  padding: 16px;
+}
+
+.adaptation-treatment-setup {
+  border-right: 1px solid var(--line);
+  background: #fafbf9;
+}
+
+.adaptation-panel-heading {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.adaptation-panel-heading span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.adaptation-panel-heading strong {
+  color: var(--green-dark);
+  font-size: 17px;
+}
+
+.adaptation-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.adaptation-treatment-panel .treatment-loads {
+  padding-top: 10px;
+}
+
+.adaptation-treatment-panel .treatment-loads input {
+  background: #ffffff;
+}
+
+.adaptation-treatment-panel .treatment-loads input:disabled {
+  background: var(--locked);
+}
+
+.adaptation-piquete-table-wrap {
+  border-radius: 6px;
+}
+
+.adaptation-treatment-panel .treatment-piquete-table {
+  min-width: 540px;
+  border-top: 0;
+}
+
+.adaptation-treatment-panel[data-treatment-panel="5"] .treatment-piquete-table {
+  min-width: 860px;
+}
+
+.adaptation-treatment-panel .treatment-piquete-table th {
+  background: #e5eee9;
+  color: #29453a;
+  font-size: 10px;
+}
+
+.adaptation-treatment-panel .treatment-piquete-table .input-head {
+  background: #fff0a3;
+  color: #5b4b00;
+}
+
+.adaptation-summary-wrap {
+  border-radius: 6px;
+}
+
+.adaptation-summary-table {
+  min-width: 620px;
+  table-layout: fixed;
+}
+
+.adaptation-summary-table th {
+  background: #dfeae5;
+  color: #29453a;
+  text-align: center;
+}
+
+.adaptation-summary-table td {
+  text-align: right;
+}
+
+.adaptation-summary-table th:first-child,
+.adaptation-summary-table td:first-child {
+  text-align: left;
 }
 
 @media (max-width: 980px) {
@@ -1064,15 +1303,6 @@ th:last-child {
     flex-direction: column;
   }
 
-  .day-status-bar {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .day-status-bar button,
-  .day-status-bar .secondary-action {
-    grid-column: 1 / -1;
-  }
-
   .screen-header {
     display: block;
   }
@@ -1082,6 +1312,15 @@ th:last-child {
   .form-grid.small,
   .treatment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .adaptation-treatment-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .adaptation-treatment-setup {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
 }
 
@@ -1096,10 +1335,6 @@ th:last-child {
 
   .license-details > div:nth-child(odd) {
     border-right: 0;
-  }
-
-  .day-status-bar {
-    grid-template-columns: 1fr;
   }
 
   .animal-consumption-table .table-wrap {

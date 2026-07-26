@@ -1,18 +1,51 @@
 {
   "name": "confinamiento-arizona-history-validation",
-  "version": "1.0.0",
+  "version": "1.0.2",
+  "description": "Sistema local de gestion para Confinamiento Arizona",
+  "main": "desktop/main.cjs",
   "type": "module",
   "private": true,
   "scripts": {
+    "desktop": "electron .",
+    "build:desktop": "electron-builder --win portable --x64",
     "dev:phase-d": "node scripts/localAppServer.cjs",
     "dev:phase-e": "node scripts/localAppServer.cjs",
     "test": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:coverage",
-    "test:unit": "node --test tests/history.unit.test.mjs tests/permissions.unit.test.mjs tests/roles.render.test.mjs tests/license.unit.test.mjs tests/license.render.test.mjs tests/moduleVersions.unit.test.mjs",
-    "test:integration": "node --test tests/locks.integration.test.mjs tests/license.integration.test.mjs",
-    "test:e2e": "node --test tests/history.e2e.cjs",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/domain/permissions.js --test-coverage-include=src/domain/license.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/permissions.unit.test.mjs tests/license.unit.test.mjs"
+    "test:unit": "node --test tests/calculations.unit.test.mjs tests/dayRollover.unit.test.mjs tests/desktopPackaging.unit.test.mjs tests/feedingLayout.unit.test.mjs tests/history.unit.test.mjs tests/reportHistory.unit.test.mjs tests/permissions.unit.test.mjs tests/roles.render.test.mjs tests/license.unit.test.mjs tests/license.render.test.mjs tests/moduleVersions.unit.test.mjs",
+    "test:integration": "node --test tests/desktopServer.integration.test.cjs tests/localDatabase.integration.test.cjs tests/locks.integration.test.mjs tests/license.integration.test.mjs tests/ingredientLoads.integration.test.mjs",
+    "test:e2e": "node --test tests/history.e2e.cjs tests/sqliteDesktop.e2e.cjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/domain/permissions.js --test-coverage-include=src/domain/license.js --test-coverage-include=src/domain/calculations.js --test-coverage-include=src/domain/dayRollover.js --test-coverage-include=src/domain/reportHistory.js --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80 tests/calculations.unit.test.mjs tests/dayRollover.unit.test.mjs tests/reportHistory.unit.test.mjs tests/permissions.unit.test.mjs tests/license.unit.test.mjs"
   },
   "devDependencies": {
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3",
     "playwright-core": "1.61.1"
+  },
+  "build": {
+    "appId": "bo.arizona.confinamiento",
+    "productName": "Confinamiento Arizona",
+    "asar": true,
+    "compression": "maximum",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "index.html",
+      "src/**/*",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "desktop/app-icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Confinamiento-Arizona-Portable-${version}.${ext}"
+    }
   }
 }

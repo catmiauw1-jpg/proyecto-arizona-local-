@@ -1,23 +1,65 @@
-import { valueInput } from "../components/fields.js?v=20260723-phase-d";
-import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-e";
-import { simpleTable } from "../components/table.js?v=20260723-phase-d";
-import { formatCurrency, formatNumber, formatPercent, toNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-
+import { valueInput } from "../components/fields.js?v=20260723-excel-parity-v1";
+import {
+  metricGrid,
+  screenHeader,
+  section,
+  statusPill,
+} from "../components/layout.js?v=20260723-editable-loads-v2";
+import {
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+  toNumber,
+} from "../domain/formatters.js?v=20260621-stage1-clean-all";
+import {
+  calculateFifthTreatmentBalance,
+  calculateTreatmentIngredientLoads,
+} from "../domain/calculations.js?v=20260723-editable-loads-v2";
 import {
   canEditFeedingActuals,
   canEditTreatmentConfig,
-} from "../domain/permissions.js?v=20260723-phase-e";
+  canEditTreatmentIngredientLoads,
+} from "../domain/permissions.js?v=20260723-excel-parity-v1";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 function feedingActualValue(state, dietId, lotId, treatment) {
   return state.feedingActuals?.[dietId]?.[lotId]?.[treatment];
 }
 
-function buildExcelLotRows(state, calculatedDiet, plan) {
+function emptyTreatmentRows(calculatedDiet) {
+  return calculatedDiet.treatments.map((treatment) => ({
+    treatment: treatment.number,
+    time: treatment.time,
+    sharePct: treatment.sharePct,
+    expectedMo: 0,
+    expectedMs: 0,
+    realizedMo: 0,
+    realizedMs: 0,
+    cost: 0,
+  }));
+}
+
+function buildExcelLotRows(
+  state,
+  calculatedDiet,
+  plan,
+  { includeAllLots = false } = {},
+) {
   const dietDryMatter = calculatedDiet.totals.dietDryMatterPct;
   const costBsKg = calculatedDiet.totals.costBsKg;
+  const plannedRows = new Map(plan.lotRows.map((lot) => [lot.lotId, lot]));
+  const sourceLots = includeAllLots
+    ? state.lots
+    : state.lots.filter((lot) => plannedRows.has(lot.id));
 
-  return plan.lotRows.map((lot) => {
+  return sourceLots.map((sourceLot) => {
+    const lot = plannedRows.get(sourceLot.id) ?? {
+      lotId: sourceLot.id,
+      pen: sourceLot.pen,
+      lotCode: sourceLot.lotCode,
+      animalCount: sourceLot.animalCount,
+      treatmentRows: emptyTreatmentRows(calculatedDiet),
+    };
     const expectedByTreatment = Object.fromEntries(
       lot.treatmentRows.map((treatment) => [treatment.treatment, treatment]),
     );
@@ -27,42 +69,45 @@ function buildExcelLotRows(state, calculatedDiet, plan) {
         feedingActualValue(state, plan.dietId, lot.lotId, number),
       ]),
     );
-    const realEspeTrato5 =
-      toNumber(expectedByTreatment[1]?.expectedMo) +
-      toNumber(expectedByTreatment[2]?.expectedMo) +
-      toNumber(expectedByTreatment[4]?.expectedMo) +
-      toNumber(expectedByTreatment[5]?.expectedMo) -
-      (toNumber(manualActuals[4] ?? expectedByTreatment[4]?.expectedMo) +
-        toNumber(manualActuals[2] ?? expectedByTreatment[2]?.expectedMo) +
-        toNumber(manualActuals[1] ?? expectedByTreatment[1]?.expectedMo));
+    const realEspeTrato5 = calculateFifthTreatmentBalance(
+      expectedByTreatment,
+      manualActuals,
+    );
     const treatments = lot.treatmentRows.map((treatment) => {
       const storedActual = manualActuals[treatment.treatment];
-      const fallbackActual =
-        ["TRANSICION", "TERMINACION"].includes(plan.dietId) && treatment.treatment === 5
-          ? realEspeTrato5
-          : treatment.expectedMo;
-      const realizedMo = storedActual ?? fallbackActual;
-      const realizedMs = realizedMo * dietDryMatter;
-      const cost = realizedMo * costBsKg;
+      const realizedMo = storedActual ?? treatment.expectedMo;
 
       return {
         ...treatment,
         realizedMo,
-        realizedMs,
-        cost,
+        realizedMs: realizedMo * dietDryMatter,
+        cost: realizedMo * costBsKg,
       };
     });
-
-    const byTreatment = Object.fromEntries(treatments.map((treatment) => [treatment.treatment, treatment]));
-    const expectedMo = treatments.reduce((total, treatment) => total + toNumber(treatment.expectedMo), 0);
+    const byTreatment = Object.fromEntries(
+      treatments.map((treatment) => [treatment.treatment, treatment]),
+    );
+    const expectedMo = treatments.reduce(
+      (total, treatment) => total + toNumber(treatment.expectedMo),
+      0,
+    );
     const expectedMs = expectedMo * dietDryMatter;
-    const realizedMo = treatments.reduce((total, treatment) => total + toNumber(treatment.realizedMo), 0);
+    const realizedMo = treatments.reduce(
+      (total, treatment) => total + toNumber(treatment.realizedMo),
+      0,
+    );
     const realizedMs = realizedMo * dietDryMatter;
-    const cost = treatments.reduce((total, treatment) => total + toNumber(treatment.cost), 0);
-    const costPerAnimal = toNumber(lot.animalCount) === 0 ? 0 : cost / toNumber(lot.animalCount);
+    const cost = treatments.reduce(
+      (total, treatment) => total + toNumber(treatment.cost),
+      0,
+    );
+    const animalCount = toNumber(sourceLot.animalCount);
 
     return {
       ...lot,
+      pen: sourceLot.pen,
+      lotCode: sourceLot.lotCode,
+      animalCount: sourceLot.animalCount,
       treatments,
       byTreatment,
       realEspeTrato5,
@@ -71,140 +116,185 @@ function buildExcelLotRows(state, calculatedDiet, plan) {
       realizedMo,
       realizedMs,
       cost,
-      costPerAnimal,
+      costPerAnimal: animalCount === 0 ? 0 : cost / animalCount,
     };
   });
 }
 
-function excelPlanTable(state, calculatedDiet, plan, permissionContext) {
-  const lotRows = buildExcelLotRows(state, calculatedDiet, plan);
-  const headers = [
-    "Piquete",
-    "Lote",
-    "1° Prev.",
-    "1° realizado",
-    "1° Costo/trato",
-    "2° Prev.",
-    "2° realizado",
-    "2° Costo/trato",
-    "3° Prev.",
-    "3° realizado",
-    "3° Costo/trato",
-    "4° Prev.",
-    "4° realizado",
-    "4° Costo/trato",
-    "5° Prev.",
-    "5° real espe.",
-    "5° realizado",
-    "5° Costo/trato",
-    "COSTO LOTE",
-    "DIARIA ALIMENTAR",
-    "PREVISTO MO",
-    "PREVISTO MS",
-    "REALIZADO MO",
-    "REALIZADO MS",
-  ];
-
-  if (!lotRows.length) {
-    return simpleTable(headers, [["Sin piquetes asignados", ...Array(headers.length - 1).fill("")]]);
-  }
+function excelTreatmentPiqueteTable(
+  state,
+  plan,
+  lotRows,
+  treatmentNumber,
+  permissionContext,
+  { includeFinalSummary = true } = {},
+) {
+  const isFifthTreatment = treatmentNumber === 5;
+  const showFinalSummary = isFifthTreatment && includeFinalSummary;
 
   return `
-    <div class="table-wrap adaptation-feeding-table">
-      <table>
-        <thead>
-          <tr>
-            ${headers
-              .map((header) => {
-                const isInput = header.includes("realizado");
-                const isLocked = header === "Piquete" || header === "Lote";
-                const className = isInput ? "input-head" : isLocked ? "locked-head" : "calc-head";
-                return `<th class="${className}">${header}</th>`;
-              })
-              .join("")}
-          </tr>
-        </thead>
-        <tbody>
-          ${lotRows
-            .map((lot) => {
-              const treatmentCells = [1, 2, 3, 4, 5].flatMap((number) => {
-                const treatment = lot.byTreatment[number] ?? {};
-                const realizedValue =
-                  feedingActualValue(state, plan.dietId, lot.lotId, number) ?? treatment.realizedMo ?? 0;
-                const cells = [
-                  `<td class="calc-cell" data-label="${number}° Prev.">${formatNumber(treatment.expectedMo)}</td>`,
-                ];
+    <table class="treatment-piquete-table">
+      <thead>
+        <tr>
+          <th class="locked-head">Piquete</th>
+          <th class="calc-head">Prev.</th>
+          ${isFifthTreatment ? '<th class="calc-head">real espe.</th>' : ""}
+          <th class="input-head">realizado</th>
+          <th class="calc-head">Costo/trato</th>
+          ${
+            isFifthTreatment
+              ? `
+                <th class="calc-head">COSTO LOTE</th>
+                <th class="calc-head">DIARIA ALIMENTAR</th>
+              `
+              : ""
+          }
+          ${
+            showFinalSummary
+              ? `
+                <th class="calc-head">PREVISTO MO</th>
+                <th class="calc-head">PREVISTO MS</th>
+                <th class="calc-head">REALIZADO MO</th>
+                <th class="calc-head">REALIZADO MS</th>
+              `
+              : ""
+          }
+        </tr>
+      </thead>
+      <tbody>
+        ${lotRows
+          .map((lot) => {
+            const treatment = lot.byTreatment[treatmentNumber] ?? {};
+            const realizedValue =
+              feedingActualValue(
+                state,
+                plan.dietId,
+                lot.lotId,
+                treatmentNumber,
+              ) ??
+              treatment.realizedMo ??
+              0;
 
-                if (number === 5) {
-                  cells.push(
-                    `<td class="calc-cell" data-label="real espe.">${formatNumber(lot.realEspeTrato5)}</td>`,
-                  );
+            return `
+              <tr data-treatment-piquete="${treatmentNumber}">
+                <td class="locked-cell" data-label="Piquete">${escapeHtml(lot.pen)}</td>
+                <td
+                  class="calc-cell"
+                  data-label="Prev."
+                  data-expected-mo="${escapeHtml(treatment.expectedMo)}"
+                >${formatNumber(treatment.expectedMo)}</td>
+                ${
+                  isFifthTreatment
+                    ? `<td class="calc-cell" data-label="real espe.">${formatNumber(lot.realEspeTrato5)}</td>`
+                    : ""
                 }
-
-                cells.push(
-                  `<td class="input-cell" data-label="${number}° realizado">
-                    ${valueInput({
-                      value: realizedValue,
-                      type: "number",
-                      onInput: `updateFeedingActual:${plan.dietId}:${lot.lotId}:${number}:number`,
-                      disabled: !canEditFeedingActuals(permissionContext.role),
-                    })}
-                  </td>`,
-                  `<td class="calc-cell" data-label="${number}° Costo/trato">${formatCurrency(treatment.cost)}</td>`,
-                );
-
-                return cells;
-              });
-
-              return `
-                <tr>
-                  <td class="locked-cell" data-label="Piquete">${escapeHtml(lot.pen)}</td>
-                  <td class="locked-cell" data-label="Lote">${escapeHtml(lot.lotCode)}</td>
-                  ${treatmentCells.join("")}
-                  <td class="calc-cell" data-label="COSTO LOTE">${formatCurrency(lot.cost)}</td>
-                  <td class="calc-cell" data-label="DIARIA ALIMENTAR">${formatCurrency(lot.costPerAnimal)}</td>
-                  <td class="calc-cell" data-label="PREVISTO MO">${formatNumber(lot.expectedMo)}</td>
-                  <td class="calc-cell" data-label="PREVISTO MS">${formatNumber(lot.expectedMs)}</td>
-                  <td class="calc-cell" data-label="REALIZADO MO">${formatNumber(lot.realizedMo)}</td>
-                  <td class="calc-cell" data-label="REALIZADO MS">${formatNumber(lot.realizedMs)}</td>
-                </tr>
-              `;
-            })
-            .join("")}
-        </tbody>
-      </table>
-    </div>
+                <td class="excel-realized-cell" data-label="realizado">
+                  ${valueInput({
+                    value: realizedValue,
+                    type: "number",
+                    onInput: `updateFeedingActual:${plan.dietId}:${lot.lotId}:${treatmentNumber}:number`,
+                    disabled: !canEditFeedingActuals(permissionContext.role),
+                  })}
+                </td>
+                <td class="calc-cell" data-label="Costo/trato">${formatCurrency(treatment.cost)}</td>
+                ${
+                  isFifthTreatment
+                    ? `
+                      <td class="calc-cell" data-label="COSTO LOTE">${formatCurrency(lot.cost)}</td>
+                      <td class="calc-cell" data-label="DIARIA ALIMENTAR">${formatCurrency(lot.costPerAnimal)}</td>
+                    `
+                    : ""
+                }
+                ${
+                  showFinalSummary
+                    ? `
+                      <td class="calc-cell" data-label="PREVISTO MO">${formatNumber(lot.expectedMo)}</td>
+                      <td class="calc-cell" data-label="PREVISTO MS">${formatNumber(lot.expectedMs)}</td>
+                      <td class="calc-cell" data-label="REALIZADO MO">${formatNumber(lot.realizedMo)}</td>
+                      <td class="calc-cell" data-label="REALIZADO MS">${formatNumber(lot.realizedMs)}</td>
+                    `
+                    : ""
+                }
+              </tr>
+            `;
+          })
+          .join("")}
+      </tbody>
+    </table>
   `;
 }
 
-function treatmentIngredientLoads(calculatedDiet, dietTotalMo, treatment) {
-  return calculatedDiet.rows.map((ingredient) => ({
-    name: ingredient.name,
-    kg: toNumber(dietTotalMo) * toNumber(ingredient.normalizedMoPct) * toNumber(treatment.sharePct),
+function treatmentIngredientLoadTable({
+  calculatedDiet,
+  dietId,
+  dietTotalMo,
+  permissionContext,
+  state,
+  treatment,
+}) {
+  const treatmentActuals =
+    state.treatmentIngredientActuals?.[dietId]?.[treatment.number] ?? {};
+  const rows = calculateTreatmentIngredientLoads(
+    calculatedDiet,
+    dietTotalMo,
+    treatment,
+  ).map((row) => ({
+    ...row,
+    effectiveKg: treatmentActuals[row.ingredientId] ?? row.kg,
   }));
-}
-
-function treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment) {
-  const rows = treatmentIngredientLoads(calculatedDiet, dietTotalMo, treatment);
 
   return `
     <div class="treatment-loads">
       <span>Kg por insumo</span>
       <table>
+        <thead>
+          <tr>
+            <th>Insumo</th>
+            <th>Prev. kg</th>
+            <th>Kg a cargar</th>
+          </tr>
+        </thead>
         <tbody>
           ${rows
             .map(
               (row) => `
                 <tr>
                   <td>${escapeHtml(row.name)}</td>
-                  <td>${formatNumber(row.kg)}</td>
+                  <td
+                    class="calculated-load-cell"
+                    data-calculated-load="${escapeHtml(row.kg)}"
+                  >
+                    ${formatNumber(row.kg)}
+                  </td>
+                  <td>
+                    ${valueInput({
+                      value: formatNumber(row.effectiveKg),
+                      type: "number",
+                      onInput: `updateTreatmentIngredientActual:${dietId}:${treatment.number}:${row.ingredientId}:number`,
+                      calculatedValue: row.kg,
+                      disabled: !canEditTreatmentIngredientLoads(
+                        permissionContext.role,
+                      ),
+                    })}
+                  </td>
                 </tr>
               `,
             )
             .join("")}
           <tr class="total-row">
             <td>Total</td>
-            <td>${formatNumber(rows.reduce((total, row) => total + toNumber(row.kg), 0))}</td>
+            <td>${formatNumber(
+              rows.reduce(
+                (total, row) => total + toNumber(row.kg),
+                0,
+              ),
+            )}</td>
+            <td>${formatNumber(
+              rows.reduce(
+                (total, row) => total + toNumber(row.effectiveKg),
+                0,
+              ),
+            )}</td>
           </tr>
         </tbody>
       </table>
@@ -212,23 +302,192 @@ function treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment) {
   `;
 }
 
-function defaultPlanTable(plan) {
-  const rows = plan.lotRows.flatMap((lot) =>
-    lot.treatmentRows.map((treatment) => [
-      escapeHtml(lot.pen),
-      escapeHtml(lot.lotCode),
-      `${treatment.treatment} (${escapeHtml(treatment.time)})`,
-      formatPercent(treatment.sharePct),
-      formatNumber(treatment.expectedMo),
-      formatNumber(treatment.expectedMs),
-      formatCurrency(treatment.cost),
-    ]),
-  );
+function treatmentColumn({
+  calculatedDiet,
+  dietId,
+  dietLocked,
+  dietTotalMo,
+  lotRows,
+  permissionContext,
+  plan,
+  role,
+  state,
+  treatment,
+}) {
+  return `
+    <article class="excel-treatment-column ${treatment.number === 5 ? "is-fifth" : ""}">
+      <h3>${treatment.number}° TRATO</h3>
+      <div class="treatment-configuration">
+        <label>
+          <span>Horario</span>
+          ${valueInput({
+            value: treatment.time,
+            type: "text",
+            onInput: `updateTreatment:${dietId}:${treatment.number}:time:text`,
+            disabled: !canEditTreatmentConfig(role, dietLocked),
+          })}
+        </label>
+        <label class="treatment-share-field">
+          <span>Porcentaje</span>
+          ${valueInput({
+            value: treatment.sharePct,
+            type: "percent",
+            onInput: `updateTreatment:${dietId}:${treatment.number}:sharePct:percent`,
+            disabled: !canEditTreatmentConfig(role, dietLocked),
+          })}
+        </label>
+        ${treatmentIngredientLoadTable({
+          calculatedDiet,
+          dietId,
+          dietTotalMo,
+          permissionContext,
+          state,
+          treatment,
+        })}
+      </div>
+      ${excelTreatmentPiqueteTable(
+        state,
+        plan,
+        lotRows,
+        treatment.number,
+        permissionContext,
+      )}
+    </article>
+  `;
+}
 
-  return simpleTable(
-    ["Piquete", "Lote", "Trato", "%", "Previsto MO", "Previsto MS", "Costo"],
-    rows.length ? rows : [["Sin piquetes asignados", "", "", "", "", "", ""]],
-  );
+function treatmentTabs(diet, selectedTreatmentNumber) {
+  return `
+    <div class="adaptation-treatment-tabs" role="tablist" aria-label="Tratos de ${escapeHtml(diet.id)}">
+      ${diet.treatments
+        .map((treatment) => {
+          const active = treatment.number === selectedTreatmentNumber;
+          return `
+            <button
+              class="adaptation-treatment-tab ${active ? "is-active" : ""}"
+              type="button"
+              role="tab"
+              aria-selected="${active}"
+              aria-controls="feeding-treatment-${diet.id}-${treatment.number}"
+              data-action="selectFeedingTreatment:${diet.id}:${treatment.number}"
+            >
+              <span>${treatment.number}° trato</span>
+              <small>${escapeHtml(treatment.time)} · ${formatPercent(treatment.sharePct)}</small>
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function treatmentPanel({
+  active,
+  calculatedDiet,
+  dietId,
+  dietLocked,
+  dietTotalMo,
+  lotRows,
+  permissionContext,
+  plan,
+  role,
+  state,
+  treatment,
+}) {
+  return `
+    <article
+      id="feeding-treatment-${dietId}-${treatment.number}"
+      data-treatment-panel="${treatment.number}" class="adaptation-treatment-panel${active ? " is-active" : ""}"
+      role="tabpanel"
+      ${active ? "" : "hidden"}
+    >
+      <div class="adaptation-treatment-workspace">
+        <div class="adaptation-treatment-setup">
+          <div class="adaptation-panel-heading">
+            <span>Configuración</span>
+            <strong>${treatment.number}° trato</strong>
+          </div>
+          <div class="adaptation-config-grid">
+            <label>
+              <span>Horario</span>
+              ${valueInput({
+                value: treatment.time,
+                type: "text",
+                onInput: `updateTreatment:${dietId}:${treatment.number}:time:text`,
+                disabled: !canEditTreatmentConfig(role, dietLocked),
+              })}
+            </label>
+            <label class="treatment-share-field">
+              <span>Porcentaje</span>
+              ${valueInput({
+                value: treatment.sharePct,
+                type: "percentInteger",
+                onInput: `updateTreatment:${dietId}:${treatment.number}:sharePct:percentInteger`,
+                disabled: !canEditTreatmentConfig(role, dietLocked),
+              })}
+            </label>
+          </div>
+          ${treatmentIngredientLoadTable({
+            calculatedDiet,
+            dietId,
+            dietTotalMo,
+            permissionContext,
+            state,
+            treatment,
+          })}
+        </div>
+        <div class="adaptation-piquete-area">
+          <div class="adaptation-panel-heading">
+            <span>Distribución diaria</span>
+            <strong>Piquetes A-1 a A-20</strong>
+          </div>
+          <div class="table-wrap adaptation-piquete-table-wrap">
+            ${excelTreatmentPiqueteTable(
+              state,
+              plan,
+              lotRows,
+              treatment.number,
+              permissionContext,
+              { includeFinalSummary: false },
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function treatmentSummaryTable(lotRows) {
+  return `
+    <div class="table-wrap adaptation-summary-wrap">
+      <table class="adaptation-summary-table">
+        <thead>
+          <tr>
+            <th>Piquete</th>
+            <th>PREVISTO MO</th>
+            <th>PREVISTO MS</th>
+            <th>REALIZADO MO</th>
+            <th>REALIZADO MS</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lotRows
+            .map(
+              (lot) => `
+                <tr data-summary-piquete="${escapeHtml(lot.pen)}">
+                  <td class="locked-cell">${escapeHtml(lot.pen)}</td>
+                  <td class="calc-cell">${formatNumber(lot.expectedMo)}</td>
+                  <td class="calc-cell">${formatNumber(lot.expectedMs)}</td>
+                  <td class="calc-cell">${formatNumber(lot.realizedMo)}</td>
+                  <td class="calc-cell">${formatNumber(lot.realizedMs)}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 export function feedingScreen(sheet, state, computed, permissionContext = {}) {
@@ -237,63 +496,82 @@ export function feedingScreen(sheet, state, computed, permissionContext = {}) {
   const calculatedDiet = computed.diets[sheet.dietId];
   const plan = computed.feedingPlan[sheet.dietId];
   const dietTotalMo = computed.dietTotals[sheet.dietId]?.totalFeedMo ?? 0;
+  const usesModernTreatmentLayout = [
+    "ADAPTACION",
+    "TRANSICION",
+    "TERMINACION",
+  ].includes(sheet.id);
+  const lotRows = buildExcelLotRows(state, calculatedDiet, plan, {
+    includeAllLots: usesModernTreatmentLayout,
+  });
+  const requestedTreatmentNumber = Number(
+    permissionContext.selectedTreatmentNumber,
+  );
+  const selectedTreatmentNumber = diet.treatments.some(
+    (treatment) => treatment.number === requestedTreatmentNumber,
+  )
+    ? requestedTreatmentNumber
+    : 1;
 
   const header = screenHeader({
-    eyebrow: `Modulo ${sheet.id}`,
+    eyebrow: `Módulo ${sheet.id}`,
     title: `Reparto de tratos - ${sheet.label}`,
     description: "Organiza el reparto de alimento por dieta, piquete y trato.",
   });
 
-  const treatmentInputs = `
-    <div class="treatment-grid">
+  const treatmentBoard = `
+    <div class="excel-treatment-scroll">
+      <div class="excel-treatment-board">
+        ${diet.treatments
+          .map((treatment) =>
+            treatmentColumn({
+              calculatedDiet,
+              dietId: sheet.dietId,
+              dietLocked,
+              dietTotalMo,
+              lotRows,
+              permissionContext,
+              plan,
+              role,
+              state,
+              treatment,
+            }),
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+  const treatmentPlan = `
+    ${treatmentTabs(diet, selectedTreatmentNumber)}
+    <div class="adaptation-treatment-panels">
       ${diet.treatments
-        .map(
-          (treatment) => `
-            <div class="treatment-row">
-              <strong>${treatment.number}° trato</strong>
-              <label>
-                <span>Horario</span>
-                ${valueInput({
-                  value: treatment.time,
-                  type: "text",
-                  onInput: `updateTreatment:${sheet.dietId}:${treatment.number}:time:text`,
-                  disabled: !canEditTreatmentConfig(role, dietLocked),
-                })}
-              </label>
-              <label>
-                <span>Porcentaje</span>
-                ${valueInput({
-                  value: treatment.sharePct,
-                  type: "percent",
-                  onInput: `updateTreatment:${sheet.dietId}:${treatment.number}:sharePct:percent`,
-                  disabled: !canEditTreatmentConfig(role, dietLocked),
-                })}
-              </label>
-              ${treatmentIngredientLoadTable(calculatedDiet, dietTotalMo, treatment)}
-            </div>
-          `,
+        .map((treatment) =>
+          treatmentPanel({
+            active: treatment.number === selectedTreatmentNumber,
+            calculatedDiet,
+            dietId: sheet.dietId,
+            dietLocked,
+            dietTotalMo,
+            lotRows,
+            permissionContext,
+            plan,
+            role,
+            state,
+            treatment,
+          }),
         )
         .join("")}
     </div>
   `;
 
   const metrics = metricGrid([
-    { label: "AB2", value: formatPercent(calculatedDiet.totals.treatmentAb2) },
-    { label: "AB3", value: statusPill(plan.treatmentStatus) },
+    {
+      label: "Porcentaje total",
+      value: formatPercent(calculatedDiet.totals.treatmentAb2),
+    },
+    { label: "Validación", value: statusPill(plan.treatmentStatus) },
     { label: "MO prevista", value: formatNumber(plan.expectedMo) },
     { label: "MS prevista", value: formatNumber(plan.expectedMs) },
-  ]);
-
-  const planTable =
-    sheet.id === "ADAPTACION" || sheet.id === "TRANSICION" || sheet.id === "TERMINACION"
-      ? excelPlanTable(state, calculatedDiet, plan, permissionContext)
-      : defaultPlanTable(plan);
-
-  const ingredientRows = calculatedDiet.rows.map((row) => [
-    escapeHtml(row.name),
-    formatPercent(row.normalizedMoPct),
-    formatPercent(row.dietDryMatterPct),
-    formatCurrency(row.costContributionBsTon),
   ]);
 
   return `
@@ -303,9 +581,13 @@ export function feedingScreen(sheet, state, computed, permissionContext = {}) {
         ? '<div class="lock-banner is-locked"><strong>Dieta bloqueada</strong><span>La configuración de horarios y porcentajes está protegida.</span></div>'
         : ""
     }
-    ${section("Configuracion de tratos", treatmentInputs)}
-    ${metrics}
-    ${section("Plan por piquete y trato", planTable)}
-    ${section("Base de dieta utilizada", simpleTable(["Insumo", "Inclusion M.O", "MS dieta", "Costo"], ingredientRows, { compact: true }))}
+    ${usesModernTreatmentLayout ? metrics : ""}
+    ${section(
+      usesModernTreatmentLayout
+        ? `Plan diario de ${sheet.label.toLocaleLowerCase("es-BO")}`
+        : "Configuración de tratos y piquetes",
+      usesModernTreatmentLayout ? treatmentPlan : treatmentBoard,
+    )}
+    ${usesModernTreatmentLayout ? "" : metrics}
   `;
 }

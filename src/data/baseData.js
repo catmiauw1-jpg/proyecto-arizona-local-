@@ -109,6 +109,8 @@ export function createEmptyPeriodState() {
     lots: buildEmptyLots(20),
     consumptionNotes: {},
     feedingActuals: {},
+    treatmentIngredientActuals: {},
+    reportOverrides: {},
     accessControl: {
       version: 1,
       initialDataLocked: false,

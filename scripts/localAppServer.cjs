@@ -1,97 +1,49 @@
-const fs = require("node:fs");
-const http = require("node:http");
 const path = require("node:path");
 
+const {
+  startLocalAppServer,
+} = require("../desktop/localServer.cjs");
+
 const projectRoot = path.resolve(__dirname, "..");
-const host = "127.0.0.1";
 const requestedPort = Number.parseInt(process.env.PORT || "4173", 10);
-const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535
-  ? requestedPort
-  : 4173;
-const remoteSupabaseModule = "https://esm.sh/@supabase/supabase-js@2.53.0";
-const localSupabaseModule = "/tests/fixtures/supabasePhaseDMock.js";
-const activePhase = process.env.npm_lifecycle_event === "dev:phase-d" ? "Fase D" : "Fase E";
+const port =
+  Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535
+    ? requestedPort
+    : 4173;
+const activePhase =
+  process.env.npm_lifecycle_event === "dev:phase-d" ? "Fase D" : "Fase E";
+const databasePath =
+  process.env.ARIZONA_DB_PATH ||
+  path.join(
+    process.env.LOCALAPPDATA || projectRoot,
+    "ConfinamientoArizonaDev",
+    "arizona-dev.db",
+  );
 
-function contentType(filePath) {
-  const types = new Map([
-    [".css", "text/css; charset=utf-8"],
-    [".html", "text/html; charset=utf-8"],
-    [".js", "text/javascript; charset=utf-8"],
-    [".png", "image/png"],
-  ]);
-  return types.get(path.extname(filePath).toLowerCase()) ?? "application/octet-stream";
-}
-
-function sendJson(response, value) {
-  response.writeHead(200, {
-    "Cache-Control": "no-store",
-    "Content-Type": "application/json; charset=utf-8",
+async function main() {
+  const runtime = await startLocalAppServer({
+    projectRoot,
+    port,
+    databasePath,
   });
-  response.end(JSON.stringify(value));
-}
+  console.log(`${activePhase} local disponible en ${runtime.url}`);
+  console.log(`Base SQLite local: ${databasePath}`);
 
-function resolveStaticPath(pathname) {
-  const relativePath = pathname === "/" ? "index.html" : decodeURIComponent(pathname.slice(1));
-  const filePath = path.resolve(projectRoot, relativePath);
-  if (filePath !== projectRoot && !filePath.startsWith(`${projectRoot}${path.sep}`)) return null;
-  return filePath;
-}
-
-function serveStatic(requestUrl, response) {
-  const filePath = resolveStaticPath(requestUrl.pathname);
-  if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    response.end("Not found");
-    return;
-  }
-
-  let body = fs.readFileSync(filePath);
-  if (filePath.endsWith(path.join("src", "services", "supabaseClient.js"))) {
-    const source = body.toString("utf8");
-    if (!source.includes(remoteSupabaseModule)) {
-      response.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
-      response.end("El servidor local no pudo sustituir el cliente remoto de Supabase.");
-      return;
-    }
-    body = Buffer.from(source.replace(remoteSupabaseModule, localSupabaseModule), "utf8");
-  }
-
-  response.writeHead(200, {
-    "Cache-Control": "no-store",
-    "Content-Type": contentType(filePath),
-  });
-  response.end(body);
-}
-
-const server = http.createServer((request, response) => {
-  const requestUrl = new URL(request.url, `http://${host}:${port}`);
-  if (requestUrl.pathname === "/api/config") {
-    sendJson(response, {
-      configured: true,
-      supabaseUrl: "http://127.0.0.1/phase-d-mock",
-      supabasePublishableKey: "phase-d-local-test-key",
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, () => {
+      runtime.close().finally(() => process.exit(0));
     });
-    return;
   }
-  serveStatic(requestUrl, response);
-});
+}
 
-server.on("error", (error) => {
+main().catch((error) => {
   if (error.code === "EADDRINUSE") {
-    console.error(`El puerto ${port} ya está ocupado. Use: $env:PORT=4174; npm.cmd run dev:phase-e`);
+    console.error(
+      `El puerto ${port} ya esta ocupado. Use: $env:PORT=4174; npm.cmd run dev:phase-e`,
+    );
     process.exitCode = 1;
     return;
   }
-  throw error;
+  console.error(error);
+  process.exitCode = 1;
 });
-
-server.listen(port, host, () => {
-  console.log(`${activePhase} local disponible en http://${host}:${port}/`);
-  console.log("Servidor de prueba local: no usa Vercel ni modifica Supabase.");
-});
-
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => {
-    server.close(() => process.exit(0));
-  });
-}

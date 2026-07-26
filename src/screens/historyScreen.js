@@ -1,8 +1,9 @@
 import { formatCurrency, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-e";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-editable-loads-v2";
 import { simpleTable } from "../components/table.js?v=20260723-phase-d";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
-import { reportScreen } from "./reportScreen.js?v=20260723-phase-d";
+import { canEditHistory } from "../domain/permissions.js?v=20260723-excel-parity-v1";
+import { reportScreen } from "./reportScreen.js?v=20260723-report-history-v1";
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -92,32 +93,60 @@ function historyTable(snapshots, filters) {
   );
 }
 
-export function historyScreen(historyState) {
+export function historyScreen(historyState, permissionContext = {}) {
+  const historyEditable = canEditHistory(permissionContext.role);
+  const selectedActions = historyState.selectedSnapshot
+    ? `
+        ${
+          historyEditable && !historyState.isEditing
+            ? '<button type="button" class="primary-action" data-action="startHistoryCorrection">Corregir registro</button>'
+            : ""
+        }
+        ${
+          historyEditable && historyState.isEditing
+            ? `
+                <button type="button" class="primary-action" data-action="saveHistoryCorrection" ${historyState.saveStatus === "saving" ? "disabled" : ""}>Guardar corrección</button>
+                <button type="button" class="secondary-action" data-action="cancelHistoryCorrection">Cancelar corrección</button>
+              `
+            : ""
+        }
+        <button type="button" class="secondary-action" data-action="closeHistorySnapshot">Volver al día actual</button>
+      `
+    : "";
   const header = screenHeader({
     eyebrow: "Modulo HISTORIAL",
     title: "Historial de registros",
     description: "Consulta de dias guardados como fotografia historica de REGISTRO.",
     actions: `
       <button type="button" class="primary-action" data-action="loadHistory">Actualizar historial</button>
-      ${
-        historyState.selectedSnapshot
-          ? '<button type="button" class="secondary-action" data-action="closeHistorySnapshot">Volver al dia actual</button>'
-          : ""
-      }
+      ${selectedActions}
     `,
   });
 
   if (historyState.selectedSnapshot) {
     const snapshot = historyState.selectedSnapshot;
-    const computed = snapshot.computed_state ?? { reportRows: [] };
+    const computed =
+      historyState.isEditing && historyState.draftComputedState
+        ? historyState.draftComputedState
+        : snapshot.computed_state ?? { reportRows: [] };
     const summary = snapshot.summary ?? {};
+    const bannerTitle = historyState.isEditing
+      ? "Corrección administrativa"
+      : "Vista histórica - Solo consulta";
     return `
       ${header}
       <div class="history-banner">
-        <strong>Vista histórica — Solo consulta</strong>
+        <strong>${bannerTitle}</strong>
         <span>${escapeHtml(summary.workDate ?? "")} · ${escapeHtml(formatDateTime(snapshot.saved_at))}</span>
       </div>
-      ${reportScreen(computed)}
+      ${historyState.message ? `<div class="history-message">${escapeHtml(historyState.message)}</div>` : ""}
+      ${reportScreen(computed, {
+        workDate: summary.workDate,
+        editable: historyEditable && historyState.isEditing,
+        actionPrefix: "updateHistoricalReport",
+        rowId: (_row, index) => index,
+        resetAction: false,
+      })}
     `;
   }
 

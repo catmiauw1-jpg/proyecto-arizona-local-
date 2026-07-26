@@ -1,7 +1,7 @@
-﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260723-phase-d";
-import { calculateState } from "../domain/calculations.js?v=20260621-stage1-clean-all";
+﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260723-editable-loads-v2";
+import { calculateState } from "../domain/calculations.js?v=20260723-editable-loads-v2";
 
-import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260723-phase-e";
+import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260723-excel-parity-v1";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -30,6 +30,8 @@ export function setState(nextState) {
     lots: nextState?.lots ?? emptyState.lots,
     consumptionNotes: nextState?.consumptionNotes ?? {},
     feedingActuals: nextState?.feedingActuals ?? {},
+    treatmentIngredientActuals: nextState?.treatmentIngredientActuals ?? {},
+    reportOverrides: nextState?.reportOverrides ?? {},
     accessControl: {
       ...createDefaultAccessControl(),
       initialDataLocked: accessControl.initialDataLocked === true,
@@ -158,6 +160,108 @@ export function updateFeedingActual(dietId, lotId, treatmentNumber, value) {
     },
   };
   emit();
+}
+
+export function updateReportOverride(lotId, key, value) {
+  const lotOverrides = state.reportOverrides?.[lotId] ?? {};
+  state = {
+    ...state,
+    reportOverrides: {
+      ...(state.reportOverrides ?? {}),
+      [lotId]: {
+        ...lotOverrides,
+        [key]: value,
+      },
+    },
+  };
+  emit();
+}
+
+export function clearReportOverrides() {
+  state = {
+    ...state,
+    reportOverrides: {},
+  };
+  emit();
+}
+
+export function updateTreatmentIngredientActual(
+  dietId,
+  treatmentNumber,
+  ingredientId,
+  value,
+  calculatedValue,
+) {
+  const diet = state.diets[dietId];
+  const hasTreatment = diet?.treatments.some(
+    (treatment) => treatment.number === treatmentNumber,
+  );
+  const hasIngredient = diet?.ingredients.some(
+    (ingredient) => ingredient.id === ingredientId,
+  );
+
+  if (!diet || !hasTreatment || !hasIngredient) {
+    return false;
+  }
+
+  const normalizedValue =
+    value !== null &&
+    calculatedValue !== undefined &&
+    calculatedValue !== null &&
+    calculatedValue !== "" &&
+    Number.isFinite(Number(value)) &&
+    Number.isFinite(Number(calculatedValue)) &&
+    Math.abs(Number(value) - Number(calculatedValue)) <= 0.005 + Number.EPSILON
+      ? null
+      : value;
+  const dietActuals = state.treatmentIngredientActuals?.[dietId] ?? {};
+  const treatmentActuals = dietActuals[treatmentNumber] ?? {};
+
+  if (normalizedValue === null) {
+    const { [ingredientId]: removedIngredient, ...remainingTreatmentActuals } =
+      treatmentActuals;
+    const { [treatmentNumber]: removedTreatment, ...otherTreatmentActuals } =
+      dietActuals;
+    const nextDietActuals = Object.keys(remainingTreatmentActuals).length
+      ? {
+          ...otherTreatmentActuals,
+          [treatmentNumber]: remainingTreatmentActuals,
+        }
+      : otherTreatmentActuals;
+    const {
+      [dietId]: removedDiet,
+      ...otherDietActuals
+    } = state.treatmentIngredientActuals ?? {};
+    const nextIngredientActuals = Object.keys(nextDietActuals).length
+      ? {
+          ...otherDietActuals,
+          [dietId]: nextDietActuals,
+        }
+      : otherDietActuals;
+
+    state = {
+      ...state,
+      treatmentIngredientActuals: nextIngredientActuals,
+    };
+    emit();
+    return true;
+  }
+
+  state = {
+    ...state,
+    treatmentIngredientActuals: {
+      ...(state.treatmentIngredientActuals ?? {}),
+      [dietId]: {
+        ...dietActuals,
+        [treatmentNumber]: {
+          ...treatmentActuals,
+          [ingredientId]: normalizedValue,
+        },
+      },
+    },
+  };
+  emit();
+  return true;
 }
 
 export function applyConsumptionFromCalculated(consumptionRows) {

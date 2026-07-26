@@ -2,7 +2,7 @@
   { id: "ADAPT", label: "ADAPT", kind: "diet", dietId: "ADAPTACION" },
   { id: "TRANS", label: "TRANS", kind: "diet", dietId: "TRANSICION" },
   { id: "TERM", label: "TERM", kind: "diet", dietId: "TERMINACION" },
-  { id: "Ingreso", label: "Ingreso", kind: "income" },
+  { id: "Ingreso", label: "INGRESO", kind: "income" },
   { id: "ADAPTACION", label: "ADAPTACION", kind: "feeding", dietId: "ADAPTACION" },
   { id: "TRANSICION", label: "TRANSICION", kind: "feeding", dietId: "TRANSICION" },
   { id: "TERMINACION", label: "TERMINACION", kind: "feeding", dietId: "TERMINACION" },
@@ -22,8 +22,8 @@ export const DIET_LABELS = ["ADAPTACION", "TRANSICION", "TERMINACION"];
 
 export const INGREDIENT_COLUMNS = [
   { key: "name", label: "Insumo", type: "text", input: true },
-  { key: "dryMatterPct", label: "%MS", type: "percent", input: true },
-  { key: "inclusionMsPct", label: "% inclusion MS", type: "percent", input: true },
+  { key: "dryMatterPct", label: "%MS", type: "percentInput", input: true },
+  { key: "inclusionMsPct", label: "% inclusion MS", type: "percentInput", input: true },
   { key: "inclusionMoPct", label: "% inclusion MO", type: "percent", input: false },
   { key: "normalizedMoPct", label: "% inclusion M.O", type: "percent", input: false },
   { key: "dietDryMatterPct", label: "%MS dieta", type: "percent", input: false },
@@ -45,7 +45,7 @@ export const LOT_COLUMNS = [
   { key: "currentDiet", label: "Dieta actual", input: true, type: "select" },
   { key: "totalFeedMs", label: "Total alimento MS", input: false, type: "number" },
   { key: "totalFeedMo", label: "Total alimento MO", input: false, type: "number" },
-  { key: "consumptionAdjustmentPct", label: "Ajuste de Consumo", input: true, type: "percent" },
+  { key: "consumptionAdjustmentPct", label: "Ajuste de Consumo", input: true, type: "percentInput" },
   { key: "cmsPerAnimal", label: "CMS/ Animal", input: false, type: "number" },
   { key: "cmoPerAnimal", label: "CMO/ Animal", input: false, type: "number" },
   { key: "cmsPctAnimal", label: "%CMS/ Animal", input: false, type: "percent" },

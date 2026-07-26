@@ -85,7 +85,7 @@ export function canEditTreatmentConfig(role, dietLocked) {
 }
 
 export function canEditInitialData(role, initialDataLocked) {
-  return isAuthorizedRole(role) && initialDataLocked !== true;
+  return isAdministrator(role) && initialDataLocked !== true;
 }
 
 export function canLockInitialData(role, initialDataLocked) {
@@ -97,6 +97,12 @@ export function canUnlockInitialData(role, initialDataLocked) {
 }
 
 export function canEditLotField(role, initialDataLocked, field) {
+  if (
+    normalizeRole(role) === ROLES.OPERATOR &&
+    ["currentDiet", "consumptionAdjustmentPct"].includes(field)
+  ) {
+    return true;
+  }
   if (INITIAL_DATA_FIELD_SET.has(field)) {
     return canEditInitialData(role, initialDataLocked);
   }
@@ -110,6 +116,10 @@ export function canEditFeedingActuals(role) {
   return isAuthorizedRole(role);
 }
 
+export function canEditTreatmentIngredientLoads(role) {
+  return isAdministrator(role);
+}
+
 export function canEditConsumptionNotes(role) {
   return isAuthorizedRole(role);
 }
@@ -119,13 +129,21 @@ export function canSaveWorkDay(role) {
 }
 
 export function canSaveHistory(role) {
-  return isAdministrator(role);
+  return isAuthorizedRole(role);
 }
 
 export function canViewHistory(role) {
   return isAuthorizedRole(role);
 }
 
-export function canEditHistory() {
-  return false;
+export function canEditHistory(role) {
+  return isAdministrator(role);
+}
+
+export function canEditReport(role) {
+  return isAdministrator(role);
+}
+
+export function canViewDietConfiguration(role) {
+  return isAdministrator(role);
 }

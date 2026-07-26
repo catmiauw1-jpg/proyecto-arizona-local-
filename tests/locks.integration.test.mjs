@@ -192,7 +192,10 @@ test("locks do not change calculations across diets, feeding, consumption or rep
   for (const dietId of dietIds) {
     assert.ok(locked.diets[dietId]);
     assert.ok(locked.feedingPlan[dietId]);
-    assert.equal(locked.feedingPlan[dietId].lotRows.length, 1);
+    assert.equal(
+      locked.feedingPlan[dietId].lotRows.length,
+      emptyState.lots.length,
+    );
   }
   assert.equal(locked.consumptionRows.length, emptyState.lots.length);
   assert.equal(locked.reportRows.length, emptyState.lots.length);

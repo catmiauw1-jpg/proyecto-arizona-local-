@@ -52,12 +52,42 @@ export async function saveRegistroHistorySnapshot({ workDayId, inputState, compu
   return data;
 }
 
-export async function listRegistroHistorySnapshots() {
+export async function closeWorkDayAndStartNext({
+  workDayId,
+  inputState,
+  computedState,
+  summary,
+  nextInputState,
+  nextComputedState,
+  nextSummary,
+}) {
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase.rpc("close_work_day", {
+    p_work_day_id: workDayId,
+    p_input_state: inputState,
+    p_computed_state: computedState,
+    p_summary: summary,
+    p_next_input_state: nextInputState,
+    p_next_computed_state: nextComputedState,
+    p_next_summary: nextSummary,
+  });
+
+  if (error) {
+    throw new Error(error.message || "No se pudo cerrar el día.");
+  }
+
+  return data;
+}
+
+export async function listRegistroHistorySnapshots(periodId) {
+  if (!periodId) return [];
+
   const supabase = await getSupabaseClient();
   const { data, error } = await supabase
     .from("work_day_snapshots")
-    .select("id, work_day_id, snapshot_type, saved_by, saved_at, summary, computed_state")
+    .select("id, period_id, work_day_id, snapshot_type, saved_by, saved_at, summary, input_state, computed_state")
     .eq("snapshot_type", "registro_history")
+    .eq("period_id", periodId)
     .order("saved_at", { ascending: false });
 
   if (error) {

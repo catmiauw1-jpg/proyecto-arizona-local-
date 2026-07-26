@@ -41,6 +41,7 @@ function nextSnapshot(database, snapshotType, params) {
   const savedAt = new Date(Date.UTC(2026, 6, 20, 12, 0, counter)).toISOString();
   const snapshot = {
     id,
+    period_id: database.period.id,
     work_day_id: database.workDay.id,
     snapshot_type: snapshotType,
     saved_by: "app-user-local",

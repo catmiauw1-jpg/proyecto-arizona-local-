@@ -1,6 +1,6 @@
 ﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260723-phase-e";
 import { formatCell, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-e";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-editable-loads-v2";
 import { dataTable, simpleTable } from "../components/table.js?v=20260723-phase-d";
 
 import {
@@ -8,7 +8,7 @@ import {
   canEditLotField,
   canLockInitialData,
   canUnlockInitialData,
-} from "../domain/permissions.js?v=20260723-phase-e";
+} from "../domain/permissions.js?v=20260723-excel-parity-v1";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 import { valueInput } from "../components/fields.js?v=20260723-phase-d";
 
@@ -89,28 +89,6 @@ export function incomeScreen(state, computed, permissionContext = {}) {
     isEditable: ({ column }) => canEditLotField(role, initialDataLocked, column.key),
   });
 
-  const animalConsumptionColumns = [
-    { key: "pen", label: "Piquete", input: false, role: "locked", type: "text" },
-    { key: "lotCode", label: "Lote", input: false, role: "locked", type: "text" },
-    { key: "consumptionAdjustmentPct", label: "Ajuste de Consumo", input: true, type: "percent" },
-    { key: "cmsPerAnimal", label: "CMS/ Animal", input: false, type: "number" },
-    { key: "cmoPerAnimal", label: "CMO/ Animal", input: false, type: "number" },
-    { key: "cmsPctAnimal", label: "%CMS/ Animal", input: false, type: "percent" },
-  ];
-
-  const animalConsumptionTable = `
-    <div class="animal-consumption-table">
-      ${dataTable({
-        columns: animalConsumptionColumns,
-        rows: computed.lots,
-        rowId: (row) => row.id,
-        actionPrefix: "updateLot",
-        compact: true,
-        isEditable: ({ column }) => canEditLotField(role, initialDataLocked, column.key),
-      })}
-    </div>
-  `;
-
   const dietTotals = simpleTable(
     ["Dieta", "Cantidad kg/MS", "Cantidad kg/MO", "%MS"],
     DIET_LABELS.map((dietId) => [
@@ -128,7 +106,6 @@ export function incomeScreen(state, computed, permissionContext = {}) {
     ${section("Datos generales", config)}
     ${metrics}
     ${section("Lotes / piquetes", lotsTable)}
-    ${section("Consumo por animal", animalConsumptionTable)}
     ${section("Resumen por dieta", dietTotals)}
   `;
 }

@@ -47,14 +47,20 @@ function writeDatabase(database) {
 
 function nextSnapshot(database, type, params) {
   const counter = database.counter + 1;
-  const prefix = type === "registro_history" ? "history" : "manual";
+  const prefix =
+    type === "registro_history"
+      ? "history"
+      : type === "day_opening"
+        ? "opening"
+        : "manual";
   const id = prefix + "-" + String(counter).padStart(3, "0");
   const savedAt =
-    type === "registro_history"
+      type === "registro_history"
       ? "2026-07-20T12:" + String(counter).padStart(2, "0") + ":00.000Z"
       : "2026-07-20T11:" + String(counter).padStart(2, "0") + ":00.000Z";
   const snapshot = {
     id,
+    period_id: database.period.id,
     work_day_id: database.workDay.id,
     snapshot_type: type,
     saved_by: "app-user-1",
@@ -68,7 +74,7 @@ function nextSnapshot(database, type, params) {
     counter,
     snapshots: [...database.snapshots, snapshot],
     workDay:
-      type === "manual_save"
+      ["manual_save", "day_opening"].includes(type)
         ? {
             ...database.workDay,
             last_snapshot_id: id,
@@ -197,6 +203,56 @@ export function createClient() {
           error: null
         };
       }
+      if (name === "close_work_day") {
+        if (params.p_work_day_id !== database.workDay.id) {
+          return { data: null, error: { message: "El día ya está cerrado." } };
+        }
+        const historyResult = nextSnapshot(
+          database,
+          "registro_history",
+          {
+            p_input_state: params.p_input_state,
+            p_computed_state: params.p_computed_state,
+            p_summary: params.p_summary,
+          },
+        );
+        const nextWorkDay = {
+          id: "work-day-" + String(historyResult.database.counter + 1),
+          period_id: database.period.id,
+          work_date: params.p_next_input_state.config.workDate,
+          status: "active",
+          last_snapshot_id: null,
+          last_saved_at: null
+        };
+        const openingResult = nextSnapshot(
+          {
+            ...historyResult.database,
+            workDay: nextWorkDay,
+          },
+          "day_opening",
+          {
+            p_input_state: params.p_next_input_state,
+            p_computed_state: params.p_next_computed_state,
+            p_summary: params.p_next_summary,
+          },
+        );
+        writeDatabase(openingResult.database);
+        return {
+          data: {
+            already_closed: false,
+            saved_at: historyResult.snapshot.saved_at,
+            closed_work_day: {
+              ...database.workDay,
+              status: "closed",
+              closed_at: historyResult.snapshot.saved_at
+            },
+            next_work_day: openingResult.database.workDay,
+            history_snapshot: historyResult.snapshot,
+            next_snapshot: openingResult.snapshot
+          },
+          error: null
+        };
+      }
       return { data: null, error: { message: "RPC no soportado: " + name } };
     }
   };
@@ -228,6 +284,12 @@ function createLocalServer() {
       return;
     }
 
+    if (requestUrl.pathname === "/tests/fixtures/supabaseHistoryValidationMock.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(supabaseMockModule);
+      return;
+    }
+
     const relativePath = requestUrl.pathname === "/" ? "index.html" : requestUrl.pathname.slice(1);
     const filePath = path.resolve(projectRoot, relativePath);
     if (!filePath.startsWith(`${projectRoot}${path.sep}`) || !fs.existsSync(filePath)) {
@@ -237,7 +299,19 @@ function createLocalServer() {
     }
 
     response.writeHead(200, { "Content-Type": contentType(filePath) });
-    response.end(fs.readFileSync(filePath));
+    const body = fs.readFileSync(filePath);
+    if (filePath.endsWith(path.join("src", "services", "supabaseClient.js"))) {
+      response.end(
+        body
+          .toString("utf8")
+          .replace(
+            "/desktop/localSupabaseClient.js",
+            "/tests/fixtures/supabaseHistoryValidationMock.js",
+          ),
+      );
+      return;
+    }
+    response.end(body);
   });
 }
 
@@ -255,6 +329,29 @@ async function updateField(page, action, value) {
   const field = page.locator(`[data-action="${action}"]`);
   await field.fill(value);
   await field.press("Tab");
+}
+
+async function openRegistro(page) {
+  await page.getByRole("link", { name: "REGISTRO", exact: true }).click();
+  await page
+    .getByRole("heading", { name: "Informe financiero nutricional", exact: true })
+    .waitFor();
+}
+
+async function saveActiveDay(page) {
+  await openRegistro(page);
+  await page.locator('[data-action="saveWorkDay"]').click();
+  await page.getByText("Guardado correctamente.").waitFor();
+}
+
+async function closeActiveDay(page) {
+  await openRegistro(page);
+  page.once("dialog", async (dialog) => {
+    assert.match(dialog.message(), /cerrará el día/i);
+    await dialog.accept();
+  });
+  await page.locator('[data-action="closeWorkDay"]').click();
+  await page.getByText(/cerrado correctamente/).waitFor();
 }
 
 async function readMockDatabase(page) {
@@ -283,15 +380,6 @@ test("validates append-only history, read-only consultation and reload locally",
 
   await context.route("**/*", async (route) => {
     const url = route.request().url();
-    if (url === "https://esm.sh/@supabase/supabase-js@2.53.0") {
-      await route.fulfill({
-        status: 200,
-        contentType: "text/javascript; charset=utf-8",
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: supabaseMockModule,
-      });
-      return;
-    }
     if (url.startsWith(origin)) {
       await route.continue();
       return;
@@ -317,32 +405,41 @@ test("validates append-only history, read-only consultation and reload locally",
   await updateField(page, "updateLot:lot-1:lotCode:text", "LOTE-A");
   await updateField(page, "updateLot:lot-1:animalCount:number", "10");
   await page.locator('[data-action="updateLot:lot-1:currentDiet:select"]').selectOption("ADAPTACION");
-  await page.locator('[data-action="saveWorkDay"]').click();
-  await page.getByText("Guardado correctamente.").waitFor();
+  await saveActiveDay(page);
   const firstOperational = await readMockDatabase(page);
   const firstOperationalId = firstOperational.workDay.last_snapshot_id;
 
-  await page.locator('[data-action="saveRegistroHistory"]').click();
-  await page.getByText(/Registro histórico guardado correctamente/).waitFor();
+  await closeActiveDay(page);
   const afterFirstHistory = await readMockDatabase(page);
-  assert.equal(afterFirstHistory.workDay.last_snapshot_id, firstOperationalId);
+  assert.equal(afterFirstHistory.workDay.work_date, "2026-07-21");
+  assert.notEqual(afterFirstHistory.workDay.last_snapshot_id, firstOperationalId);
   const firstHistorySnapshot = structuredClone(
     afterFirstHistory.snapshots.find((snapshot) => snapshot.snapshot_type === "registro_history"),
+  );
+  assert.equal(
+    await page
+      .getByText("Fecha de trabajo", { exact: true })
+      .locator("..")
+      .locator(".locked-field")
+      .textContent(),
+    "2026-07-21",
+  );
+  assert.equal(
+    await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').inputValue(),
+    "LOTE-A",
   );
 
   await updateField(page, "updateLot:lot-1:lotCode:text", injectedLot);
   await updateField(page, "updateLot:lot-1:animalCount:number", "20");
-  await page.locator('[data-action="saveWorkDay"]').click();
-  await page.getByText("Guardado correctamente.").waitFor();
+  await saveActiveDay(page);
   const secondOperational = await readMockDatabase(page);
   const secondOperationalId = secondOperational.workDay.last_snapshot_id;
   assert.notEqual(secondOperationalId, firstOperationalId);
 
-  await page.locator('[data-action="saveRegistroHistory"]').click();
-  await page.getByText(/Registro histórico guardado correctamente/).waitFor();
+  await closeActiveDay(page);
   const database = await readMockDatabase(page);
   const histories = database.snapshots.filter((snapshot) => snapshot.snapshot_type === "registro_history");
-  assert.equal(database.snapshots.length, 4);
+  assert.equal(database.snapshots.length, 6);
   assert.equal(histories.length, 2);
   assert.notEqual(histories[0].id, histories[1].id);
   assert.deepEqual(histories[0], firstHistorySnapshot);
@@ -354,7 +451,41 @@ test("validates append-only history, read-only consultation and reload locally",
   assert.equal(histories[1].input_state.lots[0].animalCount, 20);
   assert.equal(histories[1].computed_state.reportRows[0].lotCode, injectedLot);
   assert.equal(histories[1].computed_state.reportRows[0].animalCount, 20);
-  assert.equal(database.workDay.last_snapshot_id, secondOperationalId);
+  assert.notEqual(database.workDay.last_snapshot_id, secondOperationalId);
+  assert.equal(database.workDay.work_date, "2026-07-22");
+
+  await page.evaluate(() => {
+    const storageKey = "__arizona_history_validation__";
+    const stored = JSON.parse(localStorage.getItem(storageKey));
+    const source = stored.snapshots.find(
+      (snapshot) => snapshot.snapshot_type === "registro_history",
+    );
+    stored.snapshots.push({
+      ...structuredClone(source),
+      id: "history-foreign-period",
+      period_id: "period-foreign",
+      summary: {
+        ...structuredClone(source.summary),
+        workDate: "2026-07-19",
+      },
+    });
+    localStorage.setItem(storageKey, JSON.stringify(stored));
+  });
+
+  await page.getByRole("link", { name: "REGISTRO", exact: true }).click();
+  await page.getByRole("heading", { name: "FINANCIERO PROMEDIO", exact: true }).waitFor();
+  assert.equal(
+    await page
+      .getByText("Jornadas incluidas", { exact: true })
+      .locator("..")
+      .locator("strong")
+      .textContent(),
+    "3",
+  );
+  assert.equal(
+    await page.getByRole("heading", { name: "FINANCIERO TOTAL", exact: true }).count(),
+    1,
+  );
 
   await page.getByRole("link", { name: "HISTORIAL", exact: true }).click();
   const viewButtons = page.getByRole("button", { name: "Ver registro", exact: true });
@@ -375,7 +506,7 @@ test("validates append-only history, read-only consultation and reload locally",
   );
   assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 0);
 
-  await page.getByRole("button", { name: "Volver al dia actual", exact: true }).click();
+  await page.getByRole("button", { name: "Volver al día actual", exact: true }).click();
   assert.equal(
     await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').inputValue(),
     injectedLot,
@@ -392,7 +523,7 @@ test("validates append-only history, read-only consultation and reload locally",
   await page.getByRole("button", { name: "Ver registro", exact: true }).first().waitFor();
   assert.equal(await page.getByText("Vista histórica", { exact: false }).count(), 0);
   assert.equal(await page.getByRole("button", { name: "Ver registro", exact: true }).count(), 2);
-  await page.getByRole("link", { name: "Ingreso", exact: true }).click();
+  await page.getByRole("link", { name: "INGRESO", exact: true }).click();
   assert.equal(
     await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').inputValue(),
     injectedLot,
@@ -400,7 +531,7 @@ test("validates append-only history, read-only consultation and reload locally",
   assert.equal(await page.locator('[data-action="updateLot:lot-1:animalCount:number"]').inputValue(), "20");
   assert.equal(
     await page.getByText("Fecha de trabajo", { exact: true }).locator("..").locator(".locked-field").textContent(),
-    activeWorkDate,
+    "2026-07-22",
   );
 
   const visibleText = await page.locator("body").innerText();
@@ -432,15 +563,6 @@ test("validates local roles, persistent locks and protected handlers", { timeout
 
   await context.route("**/*", async (route) => {
     const url = route.request().url();
-    if (url === "https://esm.sh/@supabase/supabase-js@2.53.0") {
-      await route.fulfill({
-        status: 200,
-        contentType: "text/javascript; charset=utf-8",
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: supabaseMockModule,
-      });
-      return;
-    }
     if (url.startsWith(origin)) {
       await route.continue();
       return;
@@ -460,12 +582,15 @@ test("validates local roles, persistent locks and protected handlers", { timeout
   assert.equal(await roleSelector.inputValue(), "operator");
   assert.equal(await page.getByText("Herramienta local de prueba", { exact: true }).count(), 1);
   assert.equal(await page.locator('[data-action="updateConfig:clientName:text"]').isDisabled(), true);
-  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), false);
-  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), true);
+  assert.equal(await page.locator('[data-action="updateLot:lot-1:currentDiet:select"]').isDisabled(), false);
+  assert.equal(await page.locator('[data-action="closeWorkDay"]').count(), 0);
 
   await roleSelector.selectOption("admin_arizona");
   await updateField(page, "updateLot:lot-1:lotCode:text", "LOTE-ROLES");
+  await updateField(page, "updateLot:lot-1:entryDate:date", "2026-07-24");
   await updateField(page, "updateLot:lot-1:animalCount:number", "12");
+  await updateField(page, "updateLot:lot-1:initialWeight:number", "300");
   await page.locator('[data-action="updateLot:lot-1:currentDiet:select"]').selectOption("ADAPTACION");
   await page.evaluate(() => localStorage.setItem("__arizona_force_save_failure__", "1"));
   await page.locator('[data-action="lockInitialData"]').click();
@@ -486,13 +611,13 @@ test("validates local roles, persistent locks and protected handlers", { timeout
   assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), true);
   assert.equal(
     await page
-      .locator('[data-action="updateLot:lot-1:consumptionAdjustmentPct:percent"]')
+      .locator('[data-action="updateLot:lot-1:consumptionAdjustmentPct:percentInput"]')
       .first()
       .isDisabled(),
     false,
   );
-  assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 1);
-  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+  assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 0);
+  assert.equal(await page.locator('[data-action="closeWorkDay"]').count(), 0);
 
   await page.evaluate(() => {
     const input = document.querySelector('[data-action="updateLot:lot-1:lotCode:text"]');
@@ -517,6 +642,16 @@ test("validates local roles, persistent locks and protected handlers", { timeout
   await page.getByRole("link", { name: "ADAPT", exact: true }).click();
   const ingredientAction = "updateIngredient:ADAPTACION:ad-1:costBsTon:currency";
   assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), false);
+  await updateField(
+    page,
+    "updateIngredient:ADAPTACION:ad-1:dryMatterPct:percentInput",
+    "88",
+  );
+  await updateField(
+    page,
+    "updateIngredient:ADAPTACION:ad-1:inclusionMsPct:percentInput",
+    "100",
+  );
   await updateField(page, ingredientAction, "250");
   await page.locator('[data-action="lockDiet:ADAPTACION"]').click();
   await page.getByText("Dieta bloqueada y guardada.").waitFor();
@@ -539,54 +674,147 @@ test("validates local roles, persistent locks and protected handlers", { timeout
   await page.getByText("Dieta bloqueada y guardada.").waitFor();
 
   await roleSelector.selectOption("operator");
-  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), true);
-  await page.evaluate((action) => {
-    const input = document.querySelector(`[data-action="${action}"]`);
-    input.disabled = false;
-    input.value = "999";
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, ingredientAction);
-  await page.getByText("Acción no permitida para el rol activo.").waitFor();
-  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).inputValue(), "250");
+  assert.equal(await page.getByRole("link", { name: "ADAPT", exact: true }).count(), 0);
+  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).count(), 0);
+  assert.match(
+    await page.locator("main.workspace").innerText(),
+    /reservado para el administrador/i,
+  );
 
   await page.getByRole("link", { name: "ADAPTACION", exact: true }).click();
+  assert.equal(
+    await page.locator('[data-action^="selectFeedingTreatment:ADAPTACION:"]').count(),
+    5,
+  );
+  await page.locator('[data-action="selectFeedingTreatment:ADAPTACION:5"]').click();
+  assert.equal(
+    await page.locator('[data-treatment-panel="5"]').isVisible(),
+    true,
+  );
+  assert.equal(
+    await page.locator('[data-treatment-panel="1"]').isVisible(),
+    false,
+  );
+  await page.locator('[data-action="selectFeedingTreatment:ADAPTACION:1"]').click();
   assert.equal(
     await page.locator('[data-action="updateTreatment:ADAPTACION:1:time:text"]').isDisabled(),
     true,
   );
   assert.equal(
-    await page.locator('[data-action="updateTreatment:ADAPTACION:1:sharePct:percent"]').isDisabled(),
+    await page
+      .locator(
+        '[data-action="updateTreatment:ADAPTACION:1:sharePct:percentInteger"]',
+      )
+      .isDisabled(),
     true,
   );
   const actualAction = "updateFeedingActual:ADAPTACION:lot-1:1:number";
   assert.equal(await page.locator(`[data-action="${actualAction}"]`).isDisabled(), false);
+  assert.ok(
+    Number(
+      await page
+        .locator(
+          '[data-treatment-panel="1"] [data-expected-mo]',
+        )
+        .first()
+        .getAttribute("data-expected-mo"),
+    ) > 0,
+  );
+  assert.ok(
+    Number(
+      await page
+        .locator('[data-treatment-panel="1"] [data-calculated-load]')
+        .first()
+        .getAttribute("data-calculated-load"),
+    ) > 0,
+  );
+
+  for (const dietId of ["TRANSICION", "TERMINACION"]) {
+    await page.getByRole("link", { name: dietId, exact: true }).click();
+    await page
+      .locator(`[data-action^="selectFeedingTreatment:${dietId}:"]`)
+      .first()
+      .waitFor();
+    assert.equal(
+      await page
+        .locator(`[data-action^="selectFeedingTreatment:${dietId}:"]`)
+        .count(),
+      5,
+    );
+    await page
+      .locator(`[data-action="selectFeedingTreatment:${dietId}:5"]`)
+      .click();
+    assert.equal(
+      await page.locator('[data-treatment-panel="5"]').isVisible(),
+      true,
+    );
+    assert.equal(
+      await page.locator('[data-treatment-panel="5"] [data-treatment-piquete="5"]').count(),
+      20,
+    );
+  }
+
+  await page.getByRole("link", { name: "ADAPTACION", exact: true }).click();
   await updateField(page, actualAction, "12.5");
 
   await page.getByRole("link", { name: "ANOTACION DE CONSUMO", exact: true }).click();
   const consumptionAction = "updateConsumption:lot-1:msRealizedManual:number";
   assert.equal(await page.locator(`[data-action="${consumptionAction}"]`).isDisabled(), false);
   await updateField(page, consumptionAction, "10.25");
-  await page.locator('[data-action="saveWorkDay"]').click();
-  await page.getByText("Guardado correctamente.").waitFor();
+  await saveActiveDay(page);
 
   await roleSelector.selectOption("admin_arizona");
-  await page.locator('[data-action="saveRegistroHistory"]').click();
-  await page.getByText(/Registro histórico guardado correctamente/).waitFor();
+  await closeActiveDay(page);
+  const afterClose = await readMockDatabase(page);
+  const activeOpening = afterClose.snapshots.find(
+    (snapshot) => snapshot.id === afterClose.workDay.last_snapshot_id,
+  );
+  assert.deepEqual(activeOpening.input_state.feedingActuals, {});
+  assert.deepEqual(activeOpening.input_state.consumptionNotes, {});
+  assert.equal(activeOpening.input_state.lots[0].lotCode, "LOTE-ROLES");
   await roleSelector.selectOption("operator");
-  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+  assert.equal(await page.locator('[data-action="closeWorkDay"]').count(), 0);
 
   await page.getByRole("link", { name: "HISTORIAL", exact: true }).click();
   await page.getByRole("button", { name: "Ver registro", exact: true }).click();
   await page.getByText("Vista histórica", { exact: false }).waitFor();
   assert.equal(await page.locator("main.workspace input:not([data-action='setLocalRole']), main.workspace textarea").count(), 0);
   assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 0);
+  assert.equal(await page.locator('[data-action="closeWorkDay"]').count(), 0);
+
+  const databaseBeforeCorrection = await readMockDatabase(page);
+  const originalHistory = databaseBeforeCorrection.snapshots.find(
+    (snapshot) => snapshot.snapshot_type === "registro_history",
+  );
+  const originalCmoLot = originalHistory.computed_state.reportRows[0].cmoLot;
+
+  await roleSelector.selectOption("admin_arizona");
+  await page.locator('[data-action="startHistoryCorrection"]').click();
+  await updateField(page, "updateHistoricalReport:0:cmoLot:number", "99");
+  await page.locator('[data-action="saveHistoryCorrection"]').click();
+  await page.getByText(/Corrección guardada como un nuevo registro/).waitFor();
+
+  const databaseAfterCorrection = await readMockDatabase(page);
+  const savedHistories = databaseAfterCorrection.snapshots.filter(
+    (snapshot) => snapshot.snapshot_type === "registro_history",
+  );
+  const correctedHistory = savedHistories.find(
+    (snapshot) => snapshot.summary?.correctionOf === originalHistory.id,
+  );
+  assert.equal(savedHistories.length, 2);
+  assert.equal(
+    savedHistories.find((snapshot) => snapshot.id === originalHistory.id)
+      .computed_state.reportRows[0].cmoLot,
+    originalCmoLot,
+  );
+  assert.equal(correctedHistory.computed_state.reportRows[0].cmoLot, 99);
+  assert.equal(correctedHistory.computed_state.reportRows[0].cmoAnimal, 8.25);
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("link", { name: "Ingreso", exact: true }).click();
+  await page.getByRole("link", { name: "INGRESO", exact: true }).click();
   assert.equal(await page.locator('[data-action="setLocalRole"]').inputValue(), "operator");
   assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').isDisabled(), true);
-  await page.getByRole("link", { name: "ADAPT", exact: true }).click();
-  assert.equal(await page.locator(`[data-action="${ingredientAction}"]`).isDisabled(), true);
+  assert.equal(await page.getByRole("link", { name: "ADAPT", exact: true }).count(), 0);
 
   const visibleText = await page.locator("body").innerText();
   assert.doesNotMatch(visibleText, /\b(?:NaN|Infinity|undefined)\b/);
@@ -617,15 +845,6 @@ test("validates every local license state without mutating operational data", { 
 
   await context.route("**/*", async (route) => {
     const url = route.request().url();
-    if (url === "https://esm.sh/@supabase/supabase-js@2.53.0") {
-      await route.fulfill({
-        status: 200,
-        contentType: "text/javascript; charset=utf-8",
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: supabaseMockModule,
-      });
-      return;
-    }
     if (url.startsWith(origin)) {
       await route.continue();
       return;
@@ -648,9 +867,8 @@ test("validates every local license state without mutating operational data", { 
   await updateField(page, "updateLot:lot-1:lotCode:text", "LICENCIA-DATO");
   await updateField(page, "updateLot:lot-1:animalCount:number", "15");
   await page.locator('[data-action="updateLot:lot-1:currentDiet:select"]').selectOption("ADAPTACION");
-  await page.locator('[data-action="saveWorkDay"]').click();
-  await page.getByText("Guardado correctamente.").waitFor();
-  await page.locator('[data-action="saveRegistroHistory"]').click();
+  await saveActiveDay(page);
+  await closeActiveDay(page);
   await page.waitForFunction(() => {
     const database = JSON.parse(localStorage.getItem("__arizona_history_validation__"));
     return database.snapshots.some((snapshot) => snapshot.snapshot_type === "registro_history");
@@ -659,6 +877,7 @@ test("validates every local license state without mutating operational data", { 
 
   await licenseSelector.selectOption("expiring");
   await page.getByText("La licencia está próxima a vencer.", { exact: true }).first().waitFor();
+  await openRegistro(page);
   assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 1);
   await page.getByRole("link", { name: "LICENCIA", exact: true }).click();
   assert.match(await page.locator("main.workspace").innerText(), /Días restantes\s+3/);
@@ -666,18 +885,18 @@ test("validates every local license state without mutating operational data", { 
   await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("expired");
   await page.getByRole("heading", { name: "Licencia", exact: true }).waitFor();
   assert.match(await page.locator("main.workspace").innerText(), /Licencia vencida\. Contacte al administrador\./);
-  assert.equal(await page.locator('[data-action="authSignOut"]').count(), 1);
+  assert.equal(await page.locator('[data-action="authSignOut"]').count(), 0);
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "Licencia", exact: true }).waitFor();
   assert.match(await page.locator("main.workspace").innerText(), /Vencida/);
 
-  await page.getByRole("link", { name: "Ingreso", exact: true }).click();
+  await page.getByRole("link", { name: "INGRESO", exact: true }).click();
   const lotCodeInput = page.locator('[data-action="updateLot:lot-1:lotCode:text"]');
   assert.equal(await lotCodeInput.inputValue(), "LICENCIA-DATO");
   assert.equal(await lotCodeInput.isDisabled(), true);
   assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 0);
-  assert.equal(await page.locator('[data-action="saveRegistroHistory"]').count(), 0);
+  assert.equal(await page.locator('[data-action="closeWorkDay"]').count(), 0);
 
   await page.evaluate(() => {
     const input = document.querySelector('[data-action="updateLot:lot-1:lotCode:text"]');
@@ -698,13 +917,13 @@ test("validates every local license state without mutating operational data", { 
   assert.deepEqual(await readMockDatabase(page), databaseBeforeLicenseTests);
 
   await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("active");
-  await page.getByRole("link", { name: "Ingreso", exact: true }).click();
+  await page.getByRole("link", { name: "INGRESO", exact: true }).click();
   assert.equal(await page.locator('[data-action="updateLot:lot-1:lotCode:text"]').inputValue(), "LICENCIA-DATO");
+  await openRegistro(page);
   assert.equal(await page.locator('[data-action="saveWorkDay"]').count(), 1);
 
   await page.locator('[data-action="setLocalLicenseScenario"]').selectOption("expired");
-  await page.locator('[data-action="authSignOut"]').click();
-  await page.getByRole("heading", { name: "Iniciar sesion", exact: true }).waitFor();
+  assert.equal(await page.locator('[data-action="authSignOut"]').count(), 0);
   assert.deepEqual(await readMockDatabase(page), databaseBeforeLicenseTests);
 
   const visibleText = await page.locator("body").innerText();

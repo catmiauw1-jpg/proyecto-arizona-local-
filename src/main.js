@@ -1,16 +1,22 @@
 ﻿import { SHEETS } from "./domain/model.js?v=20260723-phase-e";
 import { toNumber } from "./domain/formatters.js?v=20260621-stage1-clean-all";
-import { appLayout } from "./components/layout.js?v=20260723-phase-e";
-import { dietScreen } from "./screens/dietScreen.js?v=20260723-phase-d";
-import { feedingScreen } from "./screens/feedingScreen.js?v=20260723-phase-d";
-import { incomeScreen } from "./screens/incomeScreen.js?v=20260723-phase-d";
-import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260723-phase-d";
-import { reportScreen } from "./screens/reportScreen.js?v=20260723-phase-d";
-import { historyScreen } from "./screens/historyScreen.js?v=20260723-phase-d";
+import {
+  calculateState,
+  recalculateReportRow,
+} from "./domain/calculations.js?v=20260724-video-fixes-v2";
+import { buildNextWorkDayState } from "./domain/dayRollover.js?v=20260726-desktop-sqlite-v1";
+import { appLayout } from "./components/layout.js?v=20260723-excel-parity-v1";
+import { dietScreen } from "./screens/dietScreen.js?v=20260723-excel-parity-v1";
+import { feedingScreen } from "./screens/feedingScreen.js?v=20260723-adaptation-tabs-v3";
+import { incomeScreen } from "./screens/incomeScreen.js?v=20260723-excel-parity-v1";
+import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260723-excel-parity-v1";
+import { reportScreen } from "./screens/reportScreen.js?v=20260723-report-history-v1";
+import { historyScreen } from "./screens/historyScreen.js?v=20260723-report-history-v1";
 import { licenseScreen } from "./screens/licenseScreen.js?v=20260723-phase-e";
 import { loadingScreen, loginScreen } from "./screens/loginScreen.js?v=20260621-stage1-clean-all";
 import { loadAuthorizedSession, signInWithPassword, signOut } from "./services/authService.js?v=20260621-stage1-clean-all";
 import {
+  closeWorkDayAndStartNext,
   listRegistroHistorySnapshots,
   loadActiveWorkDay,
   saveRegistroHistorySnapshot,
@@ -18,6 +24,7 @@ import {
 } from "./services/workDayService.js?v=20260621-stage1-clean-all";
 import {
   applyConsumptionFromCalculated,
+  clearReportOverrides,
   getComputedState,
   getState,
   resetState,
@@ -31,8 +38,10 @@ import {
   updateFeedingActual,
   updateIngredient,
   updateLot,
+  updateReportOverride,
+  updateTreatmentIngredientActual,
   updateTreatment,
-} from "./state/store.js?v=20260723-phase-d";
+} from "./state/store.js?v=20260723-excel-parity-v1";
 import {
   createAuthRuntimeState,
   createHistoryRuntimeState,
@@ -53,7 +62,9 @@ import {
   canEditHistory,
   canEditIncomeConfig,
   canEditLotField,
+  canEditReport,
   canEditTreatmentConfig,
+  canEditTreatmentIngredientLoads,
   canLockDiet,
   canLockInitialData,
   canSaveHistory,
@@ -61,10 +72,11 @@ import {
   canUnlockDiet,
   canUnlockInitialData,
   canViewHistory,
+  canViewDietConfiguration,
   isLocalDevelopmentHost,
   normalizeRole,
   resolveOperationalRole,
-} from "./domain/permissions.js?v=20260723-phase-e";
+} from "./domain/permissions.js?v=20260723-excel-parity-v1";
 import {
   buildDaySummary,
   buildRegistroHistorySummary,
@@ -75,6 +87,25 @@ let localRoleOverride = null;
 let authState = createAuthRuntimeState();
 let workDayState = createWorkDayRuntimeState();
 let historyState = createHistoryRuntimeState();
+let selectedFeedingTreatments = {
+  ADAPTACION: 1,
+  TRANSICION: 1,
+  TERMINACION: 1,
+};
+const EDITABLE_REPORT_FIELDS = new Set([
+  "pen",
+  "currentDiet",
+  "dietName",
+  "lotCode",
+  "animalCount",
+  "estimatedWeight",
+  "cmoLot",
+  "cmoAnimal",
+  "cmsLot",
+  "cmsAnimal",
+  "imsPct",
+  "nutritionalCostAnimal",
+]);
 
 function todayIsoDate() {
   const now = new Date();
@@ -93,6 +124,12 @@ function findSheet() {
 }
 
 function parseValue(value, type) {
+  if (type === "percentInteger") {
+    return Math.round(toNumber(value)) / 100;
+  }
+  if (type === "percentInput") {
+    return toNumber(value) / 100;
+  }
   if (type === "number" || type === "percent" || type === "currency" || type === "integer") {
     return toNumber(value);
   }
@@ -117,16 +154,62 @@ function buildPermissionContext(state, sheet = findSheet()) {
 function routeContent(sheet, state, computed, permissionContext) {
   if (sheet.kind === "license") return licenseScreen(permissionContext.license);
   if (sheet.id === "Ingreso") return incomeScreen(state, computed, permissionContext);
-  if (sheet.kind === "diet") return dietScreen(sheet, state, computed, permissionContext);
-  if (sheet.kind === "feeding") return feedingScreen(sheet, state, computed, permissionContext);
+  if (sheet.kind === "diet") {
+    if (!canViewDietConfiguration(permissionContext.role)) {
+      return '<div class="history-message">Este módulo está reservado para el administrador.</div>';
+    }
+    return dietScreen(sheet, state, computed, permissionContext);
+  }
+  if (sheet.kind === "feeding") {
+    return feedingScreen(sheet, state, computed, {
+      ...permissionContext,
+      selectedTreatmentNumber: selectedFeedingTreatments[sheet.dietId] ?? 1,
+    });
+  }
   if (sheet.kind === "consumption") return consumptionScreen(computed, permissionContext);
-  if (sheet.kind === "report") return reportScreen(computed);
-  if (sheet.kind === "history" && canViewHistory(permissionContext.role)) return historyScreen(historyState);
+  if (sheet.kind === "report") {
+    return reportScreen(computed, {
+      snapshots: historyState.snapshots,
+      historyStatus: historyState.status,
+      workDate: state.config.workDate || workDayState.workDate,
+      editable: canEditReport(permissionContext.role),
+      canSaveWorkDay: canSaveWorkDay(permissionContext.role),
+      canCloseWorkDay: canSaveHistory(permissionContext.role),
+      saveStatus: workDayState.saveStatus,
+      closeStatus: workDayState.historyStatus,
+    });
+  }
+  if (sheet.kind === "history" && canViewHistory(permissionContext.role)) {
+    return historyScreen(historyState, permissionContext);
+  }
   return "";
 }
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function updateHistoricalDraftRow(rowIndex, key, value) {
+  const rows = historyState.draftComputedState?.reportRows;
+  if (!Array.isArray(rows) || !Number.isInteger(rowIndex) || !rows[rowIndex]) {
+    return false;
+  }
+  if (!EDITABLE_REPORT_FIELDS.has(key)) return false;
+
+  historyState = {
+    ...historyState,
+    draftComputedState: {
+      ...historyState.draftComputedState,
+      reportRows: rows.map((row, index) =>
+        index === rowIndex
+          ? recalculateReportRow({ ...row, [key]: value }, key)
+          : row,
+      ),
+    },
+    message: "",
+  };
+  render();
+  return true;
 }
 
 function cleanStateFromWorkDay(period, workDay) {
@@ -214,7 +297,7 @@ function render() {
   const computed = getComputedState();
   const permissionContext = buildPermissionContext(state, sheet);
   if (
-    sheet.kind === "history" &&
+    ["history", "report"].includes(sheet.kind) &&
     historyState.status === "idle" &&
     canViewHistory(permissionContext.role)
   ) {
@@ -303,8 +386,37 @@ function handleCommit(event) {
     return;
   }
 
-  if (editingHistoricalSnapshot() && !canEditHistory(role)) {
+  if (
+    editingHistoricalSnapshot() &&
+    (command !== "updateHistoricalReport" || !canEditHistory(role))
+  ) {
     rejectUnauthorizedChange();
+    return;
+  }
+
+  if (command === "updateHistoricalReport") {
+    const [, rowIndex, key, type] = parts;
+    const changed = updateHistoricalDraftRow(
+      Number(rowIndex),
+      key,
+      parseValue(event.target.value, type),
+    );
+    if (!changed) rejectUnauthorizedChange();
+    return;
+  }
+
+  if (command === "updateReportOverride") {
+    const [, lotId, key, type] = parts;
+    if (
+      !canEditReport(role) ||
+      !EDITABLE_REPORT_FIELDS.has(key) ||
+      !state.lots.some((lot) => lot.id === lotId)
+    ) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    updateReportOverride(lotId, key, parseValue(event.target.value, type));
+    markUnsaved();
     return;
   }
 
@@ -385,6 +497,23 @@ function handleCommit(event) {
     return;
   }
 
+  if (command === "updateTreatmentIngredientActual") {
+    const [, dietId, treatmentNumber, ingredientId, type] = parts;
+    if (!canEditTreatmentIngredientLoads(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    updateTreatmentIngredientActual(
+      dietId,
+      Number(treatmentNumber),
+      ingredientId,
+      event.target.value.trim() === "" ? null : parseValue(event.target.value, type),
+      event.target.dataset.calculatedValue,
+    );
+    markUnsaved();
+    return;
+  }
+
 }
 
 function handleKeyDown(event) {
@@ -397,6 +526,11 @@ function handleKeyDown(event) {
 
 function handleSignOut() {
   localRoleOverride = null;
+  selectedFeedingTreatments = {
+    ADAPTACION: 1,
+    TRANSICION: 1,
+    TERMINACION: 1,
+  };
   resetLicenseRuntime();
   authState = { ...authState, status: "loading" };
   workDayState = createWorkDayRuntimeState();
@@ -414,6 +548,24 @@ function handleSignOut() {
 function handleClick(event) {
   const action = event.target?.closest("[data-action]")?.dataset?.action;
   if (!action || ["setLocalRole", "setLocalLicenseScenario"].includes(action)) return;
+  if (action.startsWith("selectFeedingTreatment:")) {
+    const [, dietId, treatmentNumber] = action.split(":");
+    const nextTreatmentNumber = Number(treatmentNumber);
+    if (
+      !["ADAPTACION", "TRANSICION", "TERMINACION"].includes(dietId) ||
+      !Number.isInteger(nextTreatmentNumber) ||
+      nextTreatmentNumber < 1 ||
+      nextTreatmentNumber > 5
+    ) {
+      return;
+    }
+    selectedFeedingTreatments = {
+      ...selectedFeedingTreatments,
+      [dietId]: nextTreatmentNumber,
+    };
+    render();
+    return;
+  }
   if (action === "authSignOut") {
     handleSignOut();
     return;
@@ -424,6 +576,16 @@ function handleClick(event) {
   }
 
   const role = activeRole();
+
+  if (action === "clearReportOverrides") {
+    if (!canEditReport(role) || editingHistoricalSnapshot()) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    clearReportOverrides();
+    markUnsaved();
+    return;
+  }
 
   if (action === "applyConsumptionFromCalculated") {
     if (!canEditConsumptionNotes(role) || editingHistoricalSnapshot()) {
@@ -444,12 +606,12 @@ function handleClick(event) {
     return;
   }
 
-  if (action === "saveRegistroHistory") {
+  if (action === "closeWorkDay") {
     if (!canSaveHistory(role) || editingHistoricalSnapshot()) {
       rejectUnauthorizedChange();
       return;
     }
-    void handleSaveRegistroHistory();
+    void handleCloseWorkDay();
     return;
   }
 
@@ -493,13 +655,67 @@ function handleClick(event) {
     historyState = {
       ...historyState,
       selectedSnapshot: historyState.snapshots.find((snapshot) => snapshot.id === snapshotId) ?? null,
+      draftComputedState: null,
+      isEditing: false,
+      saveStatus: "ready",
+      message: "",
     };
     render();
     return;
   }
 
+  if (action === "startHistoryCorrection") {
+    if (!canEditHistory(role) || !historyState.selectedSnapshot) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    historyState = {
+      ...historyState,
+      draftComputedState: clone(
+        historyState.selectedSnapshot.computed_state ?? { reportRows: [] },
+      ),
+      isEditing: true,
+      saveStatus: "ready",
+      message: "",
+    };
+    render();
+    return;
+  }
+
+  if (action === "cancelHistoryCorrection") {
+    if (!canEditHistory(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    historyState = {
+      ...historyState,
+      draftComputedState: null,
+      isEditing: false,
+      saveStatus: "ready",
+      message: "",
+    };
+    render();
+    return;
+  }
+
+  if (action === "saveHistoryCorrection") {
+    if (!canEditHistory(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    void handleSaveHistoryCorrection();
+    return;
+  }
+
   if (action === "closeHistorySnapshot") {
-    historyState = { ...historyState, selectedSnapshot: null };
+    historyState = {
+      ...historyState,
+      selectedSnapshot: null,
+      draftComputedState: null,
+      isEditing: false,
+      saveStatus: "ready",
+      message: "",
+    };
     window.location.hash = "#/Ingreso";
     render();
     return;
@@ -695,6 +911,160 @@ async function handleSaveRegistroHistory() {
   render();
 }
 
+async function handleCloseWorkDay() {
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return;
+  }
+  if (
+    workDayState.historyStatus === "saving" ||
+    !workDayState.workDay?.id
+  ) {
+    return;
+  }
+
+  const currentState = clone(getState());
+  const currentDate =
+    currentState.config?.workDate ?? workDayState.workDay.work_date;
+  const confirmed = window.confirm(
+    `Se cerrará el día ${currentDate} y se abrirá el día siguiente. ` +
+      "El registro cerrado quedará guardado en HISTORIAL. ¿Desea continuar?",
+  );
+  if (!confirmed) return;
+
+  workDayState = {
+    ...workDayState,
+    historyStatus: "saving",
+    message: "",
+  };
+  render();
+
+  try {
+    const currentComputed = clone(getComputedState());
+    const currentSummary = buildRegistroHistorySummary(
+      currentState,
+      currentComputed,
+    );
+    const nextInputState = buildNextWorkDayState(currentState);
+    const nextComputedState = calculateState(nextInputState);
+    const nextSummary = buildDaySummary(
+      nextInputState,
+      nextComputedState,
+    );
+    const result = await closeWorkDayAndStartNext({
+      workDayId: workDayState.workDay.id,
+      inputState: currentState,
+      computedState: currentComputed,
+      summary: currentSummary,
+      nextInputState,
+      nextComputedState,
+      nextSummary,
+    });
+    const nextSnapshot = result?.next_snapshot;
+    const nextWorkDay = result?.next_work_day;
+    const loadedNextState = nextSnapshot?.input_state ?? nextInputState;
+
+    setState(loadedNextState);
+    workDayState = {
+      ...workDayState,
+      status: "ready",
+      saveStatus: "saved",
+      historyStatus: "saved",
+      workDay: nextWorkDay,
+      workDate: nextWorkDay?.work_date ?? loadedNextState.config.workDate,
+      lastSavedAt: nextSnapshot?.saved_at ?? result?.saved_at ?? null,
+      message: result?.already_closed
+        ? "El día ya estaba cerrado. Se recuperó el día activo."
+        : `Día ${currentDate} cerrado correctamente. Ya puede trabajar en ${loadedNextState.config.workDate}.`,
+    };
+    historyState = {
+      ...createHistoryRuntimeState(),
+      status: "idle",
+    };
+    selectedFeedingTreatments = {
+      ADAPTACION: 1,
+      TRANSICION: 1,
+      TERMINACION: 1,
+    };
+    window.location.hash = "#/Ingreso";
+  } catch (error) {
+    workDayState = {
+      ...workDayState,
+      historyStatus: "error",
+      message: error.message || "No se pudo cerrar el día.",
+    };
+  }
+
+  render();
+}
+
+async function handleSaveHistoryCorrection() {
+  const snapshot = historyState.selectedSnapshot;
+  const draftComputedState = historyState.draftComputedState;
+  if (
+    historyState.saveStatus === "saving" ||
+    !historyState.isEditing ||
+    !snapshot ||
+    !draftComputedState
+  ) {
+    return;
+  }
+
+  historyState = { ...historyState, saveStatus: "saving", message: "" };
+  render();
+
+  try {
+    const inputState = clone(
+      snapshot.input_state ?? {
+        config: {
+          clientName: authState.client?.name ?? "Confinamiento Arizona",
+          workDate: snapshot.summary?.workDate ?? "",
+        },
+      },
+    );
+    inputState.config = {
+      ...(inputState.config ?? {}),
+      workDate: snapshot.summary?.workDate ?? inputState.config?.workDate ?? "",
+    };
+    const computedState = clone(draftComputedState);
+    const summary = {
+      ...buildRegistroHistorySummary(inputState, computedState),
+      correctionOf: snapshot.id,
+      correctedAt: new Date().toISOString(),
+    };
+    const result = await saveRegistroHistorySnapshot({
+      workDayId: snapshot.work_day_id,
+      inputState,
+      computedState,
+      summary,
+    });
+    const snapshots = await listRegistroHistorySnapshots(
+      workDayState.period?.id ?? snapshot.period_id,
+    );
+
+    historyState = {
+      ...historyState,
+      status: "ready",
+      saveStatus: "saved",
+      snapshots,
+      selectedSnapshot: snapshots.find(
+        (item) => item.id === result?.snapshot_id,
+      ) ?? null,
+      draftComputedState: null,
+      isEditing: false,
+      message: "Corrección guardada como un nuevo registro; el original se conservó.",
+    };
+  } catch (error) {
+    historyState = {
+      ...historyState,
+      saveStatus: "error",
+      message: error.message || "No se pudo guardar la corrección histórica.",
+    };
+  }
+
+  render();
+}
+
 async function handleLoadHistory() {
   if (!licenseAllowsOperations()) {
     rejectLicenseChange();
@@ -706,7 +1076,9 @@ async function handleLoadHistory() {
   render();
 
   try {
-    const snapshots = await listRegistroHistorySnapshots();
+    const snapshots = await listRegistroHistorySnapshots(
+      workDayState.period?.id,
+    );
     historyState = {
       ...historyState,
       status: "ready",

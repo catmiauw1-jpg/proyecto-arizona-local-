@@ -4,8 +4,10 @@ import test from "node:test";
 
 import { historyScreen } from "../src/screens/historyScreen.js";
 import { reportScreen } from "../src/screens/reportScreen.js";
+import { ROLES } from "../src/domain/permissions.js";
 
 const maliciousLot = '<button data-action="saveWorkDay">INJECTED</button>';
+const maliciousAnimalCount = '<img src=x onerror="alert(1)">';
 
 function reportRow(overrides = {}) {
   return {
@@ -29,10 +31,44 @@ function reportRow(overrides = {}) {
 }
 
 test("historical report escapes stored markup instead of creating actions", () => {
-  const html = reportScreen({ reportRows: [reportRow({ lotCode: maliciousLot })] });
+  const html = reportScreen({
+    reportRows: [
+      reportRow({
+        lotCode: maliciousLot,
+        animalCount: maliciousAnimalCount,
+      }),
+    ],
+  });
 
   assert.doesNotMatch(html, /<button data-action="saveWorkDay">INJECTED<\/button>/);
   assert.match(html, /&lt;button data-action=&quot;saveWorkDay&quot;&gt;INJECTED&lt;\/button&gt;/);
+  assert.doesNotMatch(html, /<img src=x onerror=/);
+});
+
+test("registro presents the current day, historical averages and accumulated totals", () => {
+  const html = reportScreen(
+    { reportRows: [reportRow({ nutritionalCostAnimal: 7, nutritionalCostLot: 70 })] },
+    {
+      workDate: "2026-07-23",
+      snapshots: [
+        {
+          saved_at: "2026-07-22T18:00:00.000Z",
+          summary: { workDate: "2026-07-22" },
+          computed_state: {
+            reportRows: [
+              reportRow({ nutritionalCostAnimal: 3, nutritionalCostLot: 30 }),
+            ],
+          },
+        },
+      ],
+    },
+  );
+
+  assert.match(html, /Registro del día 2026-07-23/);
+  assert.match(html, /FINANCIERO PROMEDIO/);
+  assert.match(html, /FINANCIERO TOTAL/);
+  assert.match(html, /Jornadas incluidas/);
+  assert.match(html, />2</);
 });
 
 test("selected history renders a read-only report", () => {
@@ -47,10 +83,33 @@ test("selected history renders a read-only report", () => {
       summary: { workDate: "2026-07-20" },
       computed_state: { reportRows: [reportRow()] },
     },
-  });
+  }, { role: ROLES.OPERATOR });
 
   assert.match(html, /Solo consulta/);
   assert.doesNotMatch(html, /<(input|select|textarea)\b/i);
+});
+
+test("administrator can edit a historical draft and save an append-only correction", () => {
+  const snapshot = {
+    id: "history-1",
+    saved_at: "2026-07-20T12:00:00.000Z",
+    summary: { workDate: "2026-07-20" },
+    computed_state: { reportRows: [reportRow()] },
+  };
+  const html = historyScreen({
+    status: "ready",
+    saveStatus: "ready",
+    snapshots: [snapshot],
+    filters: { date: "", pen: "", lot: "", diet: "" },
+    message: "",
+    selectedSnapshot: snapshot,
+    isEditing: true,
+    draftComputedState: structuredClone(snapshot.computed_state),
+  }, { role: ROLES.ADMIN });
+
+  assert.match(html, /Corrección administrativa/);
+  assert.match(html, /data-action="updateHistoricalReport:0:cmoLot:number"/);
+  assert.match(html, /data-action="saveHistoryCorrection"/);
 });
 
 test("history query orders snapshots from newest to oldest by saved_at", () => {
@@ -63,6 +122,11 @@ test("history query orders snapshots from newest to oldest by saved_at", () => {
     serviceSource,
     /\.order\("saved_at",\s*\{\s*ascending:\s*false\s*\}\)/,
   );
+  assert.match(
+    serviceSource,
+    /\.eq\("period_id",\s*periodId\)/,
+  );
+  assert.match(serviceSource, /input_state/);
 });
 
 test("history RPC remains append-only and does not update the operational pointer", () => {

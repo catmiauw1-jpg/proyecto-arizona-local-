@@ -1,6 +1,6 @@
 import { LICENSE_STATUSES } from "../domain/license.js?v=20260723-phase-e";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
-import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-phase-e";
+import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-editable-loads-v2";
 
 function displayValue(value, fallback = "No disponible") {
   const normalized = String(value ?? "").trim();

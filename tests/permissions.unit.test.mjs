@@ -11,7 +11,9 @@ import {
   canEditIncomeConfig,
   canEditInitialData,
   canEditLotField,
+  canEditReport,
   canEditTreatmentConfig,
+  canEditTreatmentIngredientLoads,
   canLockDiet,
   canLockInitialData,
   canSaveHistory,
@@ -19,6 +21,7 @@ import {
   canUnlockDiet,
   canUnlockInitialData,
   canViewHistory,
+  canViewDietConfiguration,
   isLocalDevelopmentHost,
   normalizeRole,
   roleLabel,
@@ -60,26 +63,38 @@ test("operator cannot edit diet configuration even while unlocked", () => {
   for (const locked of [false, true]) {
     assert.equal(canEditDiet(ROLES.OPERATOR, locked), false);
     assert.equal(canEditTreatmentConfig(ROLES.OPERATOR, locked), false);
+    assert.equal(canEditTreatmentIngredientLoads(ROLES.OPERATOR), false);
     assert.equal(canLockDiet(ROLES.OPERATOR, locked), false);
     assert.equal(canUnlockDiet(ROLES.OPERATOR, locked), false);
   }
 });
 
-test("recognized roles edit initial fields only while initial data is unlocked", () => {
+test("administrator edits initial fields while operator is limited to diet and adjustment", () => {
   assert.deepEqual(
     [...INITIAL_DATA_FIELDS].sort(),
     ["animalCount", "currentDiet", "entryDate", "initialWeight", "lotCode", "pen"].sort(),
   );
 
-  for (const role of [ROLES.ADMIN, ROLES.OPERATOR]) {
-    assert.equal(canEditInitialData(role, false), true);
-    assert.equal(canEditInitialData(role, true), false);
-    for (const field of INITIAL_DATA_FIELDS) {
-      assert.equal(canEditLotField(role, false, field), true);
-      assert.equal(canEditLotField(role, true, field), false);
-    }
-    assert.equal(canEditLotField(role, true, "consumptionAdjustmentPct"), true);
+  assert.equal(canEditInitialData(ROLES.ADMIN, false), true);
+  assert.equal(canEditInitialData(ROLES.ADMIN, true), false);
+  for (const field of INITIAL_DATA_FIELDS) {
+    assert.equal(canEditLotField(ROLES.ADMIN, false, field), true);
+    assert.equal(canEditLotField(ROLES.ADMIN, true, field), false);
   }
+  assert.equal(canEditLotField(ROLES.ADMIN, true, "consumptionAdjustmentPct"), true);
+
+  assert.equal(canEditInitialData(ROLES.OPERATOR, false), false);
+  for (const field of INITIAL_DATA_FIELDS) {
+    assert.equal(
+      canEditLotField(ROLES.OPERATOR, false, field),
+      field === "currentDiet",
+    );
+    assert.equal(
+      canEditLotField(ROLES.OPERATOR, true, field),
+      field === "currentDiet",
+    );
+  }
+  assert.equal(canEditLotField(ROLES.OPERATOR, true, "consumptionAdjustmentPct"), true);
 
   assert.equal(canEditInitialData("unknown", false), false);
   assert.equal(canEditLotField("unknown", false, "pen"), false);
@@ -89,6 +104,8 @@ test("recognized roles edit initial fields only while initial data is unlocked",
 test("only administrator edits administrative configuration and lock state", () => {
   assert.equal(canEditIncomeConfig(ROLES.ADMIN), true);
   assert.equal(canEditIncomeConfig(ROLES.OPERATOR), false);
+  assert.equal(canEditTreatmentIngredientLoads(ROLES.ADMIN), true);
+  assert.equal(canEditTreatmentIngredientLoads(ROLES.OPERATOR), false);
   assert.equal(canLockInitialData(ROLES.ADMIN, false), true);
   assert.equal(canLockInitialData(ROLES.ADMIN, true), false);
   assert.equal(canUnlockInitialData(ROLES.ADMIN, true), true);
@@ -97,17 +114,21 @@ test("only administrator edits administrative configuration and lock state", () 
   assert.equal(canUnlockInitialData(ROLES.OPERATOR, true), false);
 });
 
-test("both roles can record operations, save the day and consult history", () => {
+test("both roles can record operations, save and consult history", () => {
   for (const role of [ROLES.ADMIN, ROLES.OPERATOR]) {
     assert.equal(canEditFeedingActuals(role), true);
     assert.equal(canEditConsumptionNotes(role), true);
     assert.equal(canSaveWorkDay(role), true);
+    assert.equal(canSaveHistory(role), true);
     assert.equal(canViewHistory(role), true);
-    assert.equal(canEditHistory(role), false);
   }
 
-  assert.equal(canSaveHistory(ROLES.ADMIN), true);
-  assert.equal(canSaveHistory(ROLES.OPERATOR), false);
+  assert.equal(canEditReport(ROLES.ADMIN), true);
+  assert.equal(canEditReport(ROLES.OPERATOR), false);
+  assert.equal(canEditHistory(ROLES.ADMIN), true);
+  assert.equal(canEditHistory(ROLES.OPERATOR), false);
+  assert.equal(canViewDietConfiguration(ROLES.ADMIN), true);
+  assert.equal(canViewDietConfiguration(ROLES.OPERATOR), false);
 });
 
 test("unknown roles fail closed for every write and history permission", () => {
@@ -116,9 +137,12 @@ test("unknown roles fail closed for every write and history permission", () => {
   assert.equal(canEditDiet(unknownRole, false), false);
   assert.equal(canEditInitialData(unknownRole, false), false);
   assert.equal(canEditFeedingActuals(unknownRole), false);
+  assert.equal(canEditTreatmentIngredientLoads(unknownRole), false);
   assert.equal(canEditConsumptionNotes(unknownRole), false);
   assert.equal(canSaveWorkDay(unknownRole), false);
   assert.equal(canSaveHistory(unknownRole), false);
   assert.equal(canViewHistory(unknownRole), false);
   assert.equal(canEditHistory(unknownRole), false);
+  assert.equal(canEditReport(unknownRole), false);
+  assert.equal(canViewDietConfiguration(unknownRole), false);
 });

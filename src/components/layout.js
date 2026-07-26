@@ -4,75 +4,12 @@ import {
   LICENSE_STATUSES,
   LOCAL_LICENSE_SCENARIOS,
 } from "../domain/license.js?v=20260723-phase-e";
-import { ROLES, roleLabel } from "../domain/permissions.js?v=20260723-phase-e";
+import {
+  ROLES,
+  canViewDietConfiguration,
+  roleLabel,
+} from "../domain/permissions.js?v=20260723-excel-parity-v1";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
-
-function formatDateTime(value) {
-  if (!value) return "Sin guardar";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Sin guardar";
-  return new Intl.DateTimeFormat("es-BO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function dayStatusBar(workDayContext) {
-  if (!workDayContext?.workDay) return "";
-
-  const statusLabels = {
-    ready: "Sin guardar",
-    saving: "Guardando...",
-    saved: "Guardado",
-    error: "Error al guardar",
-  };
-  const status = statusLabels[workDayContext.saveStatus] ?? "Sin guardar";
-  const disabled = workDayContext.saveStatus === "saving" ? "disabled" : "";
-  const historyDisabled = workDayContext.historyStatus === "saving" ? "disabled" : "";
-  const canSaveWorkDay = workDayContext.permissions?.canSaveWorkDay === true;
-  const canSaveHistory = workDayContext.permissions?.canSaveHistory === true;
-  const actions = workDayContext.isHistoryView
-    ? '<strong>Solo consulta</strong>'
-    : `
-      ${
-        canSaveWorkDay
-          ? `<button type="button" data-action="saveWorkDay" ${disabled}>Guardar día</button>`
-          : ""
-      }
-      ${
-        canSaveHistory
-          ? `
-            <button type="button" class="secondary-action" data-action="saveRegistroHistory" ${historyDisabled}>
-              Guardar día en historial
-            </button>
-          `
-          : ""
-      }
-    `;
-
-  return `
-    <div class="day-status-bar">
-      <div>
-        <span>Día activo</span>
-        <strong>${escapeHtml(workDayContext.period?.name ?? "Periodo activo")}</strong>
-      </div>
-      <div>
-        <span>Fecha de trabajo</span>
-        <strong>${escapeHtml(workDayContext.workDate ?? workDayContext.workDay.work_date ?? "")}</strong>
-      </div>
-      <div>
-        <span>Último guardado</span>
-        <strong>${formatDateTime(workDayContext.lastSavedAt)}</strong>
-      </div>
-      <div>
-        <span>Estado</span>
-        <strong>${status}</strong>
-      </div>
-      ${actions}
-      ${workDayContext.message ? `<p>${escapeHtml(workDayContext.message)}</p>` : ""}
-    </div>
-  `;
-}
 
 function localDevelopmentTool(roleContext) {
   if (!roleContext?.localToolEnabled) return "";
@@ -122,16 +59,30 @@ function licenseNotice(licenseContext, activeSheet) {
   `;
 }
 
+function workDayFeedback(workDayContext) {
+  const message = workDayContext?.message;
+  if (
+    !message ||
+    message === "Día recuperado correctamente." ||
+    message === "Día activo iniciado sin datos guardados."
+  ) {
+    return "";
+  }
+
+  return `<div class="work-day-feedback" role="status">${escapeHtml(message)}</div>`;
+}
+
 export function appLayout({
   activeSheet,
   content,
-  sessionContext = null,
   workDayContext = null,
   roleContext = null,
   licenseContext = null,
 }) {
-  const userEmail = sessionContext?.user?.email ?? "";
-  const clientName = sessionContext?.client?.name ?? "";
+  const visibleSheets = SHEETS.filter(
+    (sheet) =>
+      sheet.kind !== "diet" || canViewDietConfiguration(roleContext?.role),
+  );
 
   return `
     <div class="app-shell">
@@ -146,7 +97,7 @@ export function appLayout({
           </div>
         </div>
         <nav class="nav-list">
-          ${SHEETS.map(
+          ${visibleSheets.map(
             (sheet) => `
               <a href="#/${encodeURIComponent(sheet.id)}" class="${activeSheet === sheet.id ? "active" : ""}">
                 ${sheet.label}
@@ -154,22 +105,11 @@ export function appLayout({
             `,
           ).join("")}
         </nav>
-        ${
-          sessionContext
-            ? `
-              <div class="session-card">
-                <span>${escapeHtml(clientName)}</span>
-                <strong>${escapeHtml(userEmail)}</strong>
-                <button type="button" data-action="authSignOut">Cerrar sesion</button>
-              </div>
-            `
-            : ""
-        }
       </aside>
       <main class="workspace">
         ${localDevelopmentTool(roleContext)}
         ${licenseNotice(licenseContext, activeSheet)}
-        ${activeSheet === "LICENCIA" ? "" : dayStatusBar(workDayContext)}
+        ${workDayFeedback(workDayContext)}
         ${content}
       </main>
     </div>

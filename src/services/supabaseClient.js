@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
+import { createClient } from "/desktop/localSupabaseClient.js";
 
 let configPromise;
 let clientPromise;
@@ -6,10 +6,10 @@ let clientPromise;
 async function loadPublicConfig() {
   if (!configPromise) {
     configPromise = fetch("/api/config", { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) throw new Error("No se pudo cargar la configuracion de Supabase.");
+      if (!response.ok) throw new Error("No se pudo cargar la configuración local.");
       const config = await response.json();
       if (!config.configured || !config.supabaseUrl || !config.supabasePublishableKey) {
-        throw new Error("Supabase no esta configurado para este entorno.");
+        throw new Error("El almacenamiento local no está configurado.");
       }
       return config;
     });

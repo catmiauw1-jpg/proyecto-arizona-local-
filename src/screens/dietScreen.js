@@ -1,12 +1,12 @@
 ﻿import { INGREDIENT_COLUMNS } from "../domain/model.js?v=20260723-phase-e";
 import { formatCurrency, formatPercent } from "../domain/formatters.js?v=20260621-stage1-clean-all";
-import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-phase-e";
+import { metricGrid, screenHeader, section, statusPill } from "../components/layout.js?v=20260723-editable-loads-v2";
 import { dataTable, simpleTable } from "../components/table.js?v=20260723-phase-d";
 
 const EXCEL_DIET_COLUMNS = [
   { key: "name", label: "INSUMOS", type: "text", input: true },
-  { key: "dryMatterPct", label: "%MS", type: "percent", input: true },
-  { key: "inclusionMsPct", label: "%INCLUSIÓN EN MS", type: "percent", input: true },
+  { key: "dryMatterPct", label: "%MS", type: "percentInput", input: true },
+  { key: "inclusionMsPct", label: "%INCLUSIÓN EN MS", type: "percentInput", input: true },
   { key: "normalizedMoPct", label: "%INCLUSIÓN EN M.O", type: "percent", input: false },
   { key: "dietDryMatterPct", label: "%MS DIETA", type: "percent", input: false },
   { key: "costBsTon", label: "Costo (Bs/ton)", type: "currency", input: true },
@@ -17,7 +17,7 @@ import {
   canEditDiet,
   canLockDiet,
   canUnlockDiet,
-} from "../domain/permissions.js?v=20260723-phase-e";
+} from "../domain/permissions.js?v=20260723-excel-parity-v1";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 export function dietScreen(sheet, state, computed, permissionContext = {}) {

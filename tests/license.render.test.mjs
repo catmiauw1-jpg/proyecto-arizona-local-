@@ -90,5 +90,6 @@ test("invalid license keeps data visible but removes every operational action", 
   assert.match(html, /Licencia vencida/);
   assert.doesNotMatch(html, /data-action="saveWorkDay"/);
   assert.doesNotMatch(html, /data-action="saveRegistroHistory"/);
-  assert.match(html, /data-action="authSignOut"/);
+  assert.doesNotMatch(html, /data-action="closeWorkDay"/);
+  assert.doesNotMatch(html, /session-card|authSignOut|Cerrar sesion/);
 });
