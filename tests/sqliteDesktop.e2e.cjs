@@ -154,6 +154,28 @@ test(
     await page.getByText("Vista histórica", { exact: false }).waitFor();
     assert.match(await page.locator("main.workspace").innerText(), /LOTE-SQLITE/);
 
+    await page.locator('[data-action="closeHistorySnapshot"]').click();
+    await page
+      .getByText("Ingreso de lotes y calculo inicial")
+      .waitFor();
+    await page.getByRole("link", { name: "HISTORIAL", exact: true }).click();
+    const deleteButton = page.locator(
+      '[data-action^="deleteHistorySnapshot:"]',
+    );
+    assert.equal(await deleteButton.count(), 1);
+    page.once("dialog", async (dialog) => {
+      assert.match(dialog.message(), /no se puede deshacer/i);
+      await dialog.accept();
+    });
+    await deleteButton.click();
+    await page
+      .getByText("Registro histórico eliminado correctamente.")
+      .waitFor();
+    assert.equal(
+      await page.getByRole("button", { name: "Ver registro", exact: true }).count(),
+      0,
+    );
+
     await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("link", { name: "INGRESO", exact: true }).click();
     assert.equal(

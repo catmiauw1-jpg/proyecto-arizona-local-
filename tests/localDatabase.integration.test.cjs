@@ -255,6 +255,111 @@ test("closed days accept only dated append-only corrections", (context) => {
   );
 });
 
+test("history deletion removes only the selected record and preserves operational data", (context) => {
+  const { database } = openTestDatabase(context);
+  const active = database.ensureActiveWorkDay();
+  const inputState = sampleState("2026-07-26");
+  const manual = database.saveWorkDaySnapshot({
+    workDayId: active.work_day.id,
+    inputState,
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-26" },
+  });
+  const firstHistory = database.saveRegistroHistorySnapshot({
+    workDayId: active.work_day.id,
+    inputState,
+    computedState: { reportRows: [{ pen: "A-1", cmoLot: 100 }] },
+    summary: { workDate: "2026-07-26", marker: "first" },
+  });
+  const secondHistory = database.saveRegistroHistorySnapshot({
+    workDayId: active.work_day.id,
+    inputState,
+    computedState: { reportRows: [{ pen: "A-1", cmoLot: 120 }] },
+    summary: { workDate: "2026-07-26", marker: "second" },
+  });
+
+  const deleted = database.deleteRegistroHistorySnapshot({
+    snapshotId: firstHistory.snapshot_id,
+    periodId: active.period.id,
+    actorRole: "admin_arizona",
+  });
+
+  assert.equal(deleted.deleted, true);
+  assert.equal(deleted.snapshot_id, firstHistory.snapshot_id);
+  assert.deepEqual(
+    database
+      .listWorkDaySnapshots({
+        snapshotType: "registro_history",
+        periodId: active.period.id,
+      })
+      .map((snapshot) => snapshot.id),
+    [secondHistory.snapshot_id],
+  );
+  assert.equal(
+    database.listWorkDaySnapshots({ snapshotType: "manual_save" })[0].id,
+    manual.snapshot_id,
+  );
+  assert.equal(
+    database.ensureActiveWorkDay().snapshot.id,
+    manual.snapshot_id,
+  );
+});
+
+test("history deletion rejects unknown, foreign-period and non-history snapshots", (context) => {
+  const { database } = openTestDatabase(context);
+  const active = database.ensureActiveWorkDay();
+  const manual = database.saveWorkDaySnapshot({
+    workDayId: active.work_day.id,
+    inputState: sampleState("2026-07-26"),
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-26" },
+  });
+  const history = database.saveRegistroHistorySnapshot({
+    workDayId: active.work_day.id,
+    inputState: sampleState("2026-07-26"),
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-26" },
+  });
+
+  assert.throws(
+    () =>
+      database.deleteRegistroHistorySnapshot({
+        snapshotId: history.snapshot_id,
+        periodId: active.period.id,
+        actorRole: "operator",
+      }),
+    /administrador/i,
+  );
+
+  assert.throws(
+    () =>
+      database.deleteRegistroHistorySnapshot({
+        snapshotId: "missing",
+        periodId: active.period.id,
+        actorRole: "admin_arizona",
+      }),
+    /no existe/i,
+  );
+  assert.throws(
+    () =>
+      database.deleteRegistroHistorySnapshot({
+        snapshotId: manual.snapshot_id,
+        periodId: active.period.id,
+        actorRole: "admin_arizona",
+      }),
+    /hist[oó]rico/i,
+  );
+  assert.throws(
+    () =>
+      database.deleteRegistroHistorySnapshot({
+        snapshotId: manual.snapshot_id,
+        periodId: "periodo-ajeno",
+        actorRole: "admin_arizona",
+      }),
+    /periodo/i,
+  );
+});
+
 test("legacy browser data imports once without duplicating history", (context) => {
   const { database } = openTestDatabase(context);
   const legacy = {

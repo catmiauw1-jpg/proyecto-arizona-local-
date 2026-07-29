@@ -8,9 +8,13 @@ import {
   canEditLotField,
   canLockInitialData,
   canUnlockInitialData,
-} from "../domain/permissions.js?v=20260723-excel-parity-v1";
+} from "../domain/permissions.js?v=20260727-history-delete-v1";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 import { valueInput } from "../components/fields.js?v=20260723-phase-d";
+import {
+  MAX_ACTIVE_LOTS,
+  normalizeActiveLotCount,
+} from "../domain/calculations.js?v=20260727-active-lots-v1";
 
 export function incomeScreen(state, computed, permissionContext = {}) {
   const { role, initialDataLocked = false } = permissionContext;
@@ -47,6 +51,13 @@ export function incomeScreen(state, computed, permissionContext = {}) {
   `;
 
   const configEditable = canEditIncomeConfig(role);
+  const activeLotCount = normalizeActiveLotCount(
+    state.config.activeLotCount,
+  );
+  const lotCountOptions = Array.from(
+    { length: MAX_ACTIVE_LOTS },
+    (_, index) => String(index + 1),
+  );
   const config = `
     <div class="form-grid">
       <label>
@@ -88,6 +99,18 @@ export function incomeScreen(state, computed, permissionContext = {}) {
     actionPrefix: "updateLot",
     isEditable: ({ column }) => canEditLotField(role, initialDataLocked, column.key),
   });
+  const lotCountControl = `
+    <label class="lot-count-control">
+      <span>Cantidad de lotes</span>
+      ${valueInput({
+        value: String(activeLotCount),
+        type: "select",
+        options: lotCountOptions,
+        onInput: "updateConfig:activeLotCount:integer",
+        disabled: !configEditable,
+      })}
+    </label>
+  `;
 
   const dietTotals = simpleTable(
     ["Dieta", "Cantidad kg/MS", "Cantidad kg/MO", "%MS"],
@@ -105,7 +128,7 @@ export function incomeScreen(state, computed, permissionContext = {}) {
     ${lockStatus}
     ${section("Datos generales", config)}
     ${metrics}
-    ${section("Lotes / piquetes", lotsTable)}
+    ${section("Lotes / piquetes", lotsTable, lotCountControl)}
     ${section("Resumen por dieta", dietTotals)}
   `;
 }

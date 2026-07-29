@@ -7,6 +7,7 @@ import {
   calculateState,
   calculateTreatmentIngredientLoads,
   hasOperationalLot,
+  normalizeActiveLotCount,
   recalculateReportRow,
 } from "../src/domain/calculations.js";
 
@@ -109,6 +110,65 @@ test("whole-number diet percentages keep MO totals at the full-lot scale", () =>
   assert.ok(
     Math.abs(calculated.feedingPlan.ADAPTACION.lotRows[0].treatmentRows[0].expectedMo - 163.63636363636363) <
       1e-9,
+  );
+});
+
+test("active lot count is normalized to the supported range", () => {
+  assert.equal(normalizeActiveLotCount(undefined), 20);
+  assert.equal(normalizeActiveLotCount("4"), 4);
+  assert.equal(normalizeActiveLotCount(4.9), 4);
+  assert.equal(normalizeActiveLotCount(0), 1);
+  assert.equal(normalizeActiveLotCount(21), 20);
+  assert.equal(normalizeActiveLotCount(Number.NaN), 20);
+});
+
+test("active lot count excludes hidden lots from every calculated module", () => {
+  const lots = [1, 2, 3, 4].map((number) => ({
+    id: `lot-${number}`,
+    entryDate: "2026-07-24",
+    pen: `A-${number}`,
+    lotCode: `LOTE-${number}`,
+    animalCount: number === 3 ? 999 : number * 10,
+    initialWeight: 300,
+    initialImsPct: 0.016,
+    estimatedGmd: 0,
+    currentDiet: "ADAPTACION",
+    consumptionAdjustmentPct: 0,
+  }));
+  const state = {
+    config: {
+      workDate: "2026-07-24",
+      activeLotCount: 2,
+    },
+    diets: buildAllDiets(),
+    lots,
+    consumptionNotes: {},
+    feedingActuals: {},
+    reportOverrides: {},
+  };
+
+  const calculated = calculateState(state);
+
+  assert.equal(state.lots.length, 4);
+  assert.deepEqual(
+    calculated.lots.map((lot) => lot.id),
+    ["lot-1", "lot-2"],
+  );
+  assert.equal(calculated.consumptionRows.length, 2);
+  assert.equal(calculated.reportRows.length, 2);
+  Object.values(calculated.feedingPlan).forEach((plan) => {
+    assert.deepEqual(
+      plan.lotRows.map((row) => row.lotId),
+      ["lot-1", "lot-2"],
+    );
+  });
+  assert.equal(
+    calculated.dietTotals.ADAPTACION.totalFeedMs,
+    calculated.lots[0].totalFeedMs + calculated.lots[1].totalFeedMs,
+  );
+  assert.equal(
+    calculated.reportRows.some((row) => row.lotId === "lot-3"),
+    false,
   );
 });
 

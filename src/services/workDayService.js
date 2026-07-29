@@ -52,6 +52,28 @@ export async function saveRegistroHistorySnapshot({ workDayId, inputState, compu
   return data;
 }
 
+export async function deleteRegistroHistorySnapshot({ snapshotId, periodId, actorRole }) {
+  if (typeof snapshotId !== "string" || snapshotId.trim() === "") {
+    throw new Error("El registro historico no es valido.");
+  }
+  if (typeof periodId !== "string" || periodId.trim() === "") {
+    throw new Error("El periodo activo no es valido.");
+  }
+
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase.rpc("delete_registro_history_snapshot", {
+    p_snapshot_id: snapshotId,
+    p_period_id: periodId,
+    p_actor_role: actorRole,
+  });
+
+  if (error) {
+    throw new Error(error.message || "No se pudo eliminar el registro historico.");
+  }
+
+  return data;
+}
+
 export async function closeWorkDayAndStartNext({
   workDayId,
   inputState,

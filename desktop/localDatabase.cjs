@@ -208,6 +208,13 @@ function createLocalDatabase({
        ORDER BY saved_at DESC, rowid DESC
        LIMIT 1`,
     ),
+    latestSnapshotForDayExcluding: database.prepare(
+      `SELECT ${SNAPSHOT_COLUMNS}
+       FROM work_day_snapshots
+       WHERE work_day_id = ? AND id <> ?
+       ORDER BY saved_at DESC, rowid DESC
+       LIMIT 1`,
+    ),
     insertPeriod: database.prepare(
       `INSERT INTO periods(id, name, start_date, status, created_at)
        VALUES (?, ?, ?, 'active', ?)`,
@@ -234,6 +241,10 @@ function createLocalDatabase({
       `UPDATE work_days
        SET last_snapshot_id = ?, last_saved_at = ?
        WHERE id = ?`,
+    ),
+    deleteHistorySnapshot: database.prepare(
+      `DELETE FROM work_day_snapshots
+       WHERE id = ? AND period_id = ? AND snapshot_type = 'registro_history'`,
     ),
     closeWorkDay: database.prepare(
       `UPDATE work_days
@@ -491,6 +502,60 @@ function createLocalDatabase({
     };
   }
 
+  function deleteRegistroHistorySnapshot({ snapshotId, periodId, actorRole } = {}) {
+    if (actorRole !== "admin_arizona") {
+      throw new Error("Solo el administrador puede eliminar registros historicos.");
+    }
+    if (typeof snapshotId !== "string" || snapshotId.trim() === "") {
+      throw new Error("El registro historico no es valido.");
+    }
+    if (typeof periodId !== "string" || periodId.trim() === "") {
+      throw new Error("El periodo no es valido.");
+    }
+
+    const snapshot = statements.snapshotById.get(snapshotId);
+    if (!snapshot) throw new Error("El registro historico no existe.");
+    if (snapshot.period_id !== periodId) {
+      throw new Error("El registro historico no pertenece al periodo activo.");
+    }
+    if (snapshot.snapshot_type !== "registro_history") {
+      throw new Error("Solo se pueden eliminar registros historicos.");
+    }
+
+    const workDay = statements.workDayById.get(snapshot.work_day_id);
+    const updatesLastSnapshot = workDay?.last_snapshot_id === snapshotId;
+    const replacement = updatesLastSnapshot
+      ? statements.latestSnapshotForDayExcluding.get(snapshot.work_day_id, snapshotId)
+      : null;
+
+    database.exec("BEGIN IMMEDIATE;");
+    try {
+      const result = statements.deleteHistorySnapshot.run(snapshotId, periodId);
+      if (Number(result.changes) !== 1) {
+        throw new Error("No se pudo eliminar el registro historico.");
+      }
+      if (updatesLastSnapshot) {
+        statements.updateLastSnapshot.run(
+          replacement?.id ?? null,
+          replacement?.saved_at ?? null,
+          snapshot.work_day_id,
+        );
+      }
+      database.exec("COMMIT;");
+
+      return {
+        deleted: true,
+        snapshot_id: snapshotId,
+        period_id: periodId,
+        work_day_id: snapshot.work_day_id,
+        replacement_snapshot_id: replacement?.id ?? null,
+      };
+    } catch (error) {
+      database.exec("ROLLBACK;");
+      throw error;
+    }
+  }
+
   function listWorkDaySnapshots({ snapshotType, periodId } = {}) {
     const conditions = [];
     const values = [];
@@ -622,6 +687,7 @@ function createLocalDatabase({
     ensureActiveWorkDay,
     saveWorkDaySnapshot,
     saveRegistroHistorySnapshot,
+    deleteRegistroHistorySnapshot,
     listWorkDaySnapshots,
     closeWorkDay,
     close() {

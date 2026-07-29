@@ -104,6 +104,7 @@ export function createEmptyPeriodState() {
       clientName: "Confinamiento Arizona",
       startDate: "",
       workDate: todayIso(),
+      activeLotCount: 20,
     },
     diets: JSON.parse(JSON.stringify(baseDiets)),
     lots: buildEmptyLots(20),

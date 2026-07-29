@@ -140,6 +140,10 @@ export function canEditHistory(role) {
   return isAdministrator(role);
 }
 
+export function canDeleteHistory(role) {
+  return isAdministrator(role);
+}
+
 export function canEditReport(role) {
   return isAdministrator(role);
 }

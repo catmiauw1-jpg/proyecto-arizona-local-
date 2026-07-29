@@ -1,5 +1,22 @@
 ﻿import { dateDiffInDays, toNumber } from "./formatters.js?v=20260621-stage1-clean-all";
 
+export const MIN_ACTIVE_LOTS = 1;
+export const MAX_ACTIVE_LOTS = 20;
+
+export function normalizeActiveLotCount(value) {
+  if (value === undefined || value === null || value === "") {
+    return MAX_ACTIVE_LOTS;
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return MAX_ACTIVE_LOTS;
+
+  return Math.min(
+    MAX_ACTIVE_LOTS,
+    Math.max(MIN_ACTIVE_LOTS, Math.trunc(numericValue)),
+  );
+}
+
 function sum(items, selector) {
   return items.reduce((total, item) => total + toNumber(selector(item)), 0);
 }
@@ -114,8 +131,12 @@ export function calculateAllDiets(diets) {
 
 export function calculateLots(state, calculatedDiets) {
   const workDate = state.config.workDate;
+  const activeLotCount = normalizeActiveLotCount(
+    state.config.activeLotCount,
+  );
+  const activeLots = state.lots.slice(0, activeLotCount);
 
-  return state.lots.map((lot) => {
+  return activeLots.map((lot) => {
     const diet = calculatedDiets[lot.currentDiet];
     const consumption = state.consumptionNotes[lot.id] ?? {};
     const daysInConfinement = dateDiffInDays(workDate, lot.entryDate);

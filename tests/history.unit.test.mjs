@@ -112,6 +112,37 @@ test("administrator can edit a historical draft and save an append-only correcti
   assert.match(html, /data-action="saveHistoryCorrection"/);
 });
 
+test("only the administrator sees the history delete action", () => {
+  const snapshot = {
+    id: "history-delete-1",
+    saved_at: "2026-07-20T12:00:00.000Z",
+    saved_by: "app-user-local",
+    snapshot_type: "registro_history",
+    summary: { workDate: "2026-07-20" },
+    computed_state: { reportRows: [reportRow()] },
+  };
+  const historyState = {
+    status: "ready",
+    deleteStatus: "ready",
+    deletingSnapshotId: null,
+    snapshots: [snapshot],
+    filters: { date: "", pen: "", lot: "", diet: "" },
+    message: "",
+    selectedSnapshot: null,
+  };
+
+  const adminHtml = historyScreen(historyState, { role: ROLES.ADMIN });
+  const operatorHtml = historyScreen(historyState, { role: ROLES.OPERATOR });
+
+  assert.match(
+    adminHtml,
+    /data-action="deleteHistorySnapshot:history-delete-1"/,
+  );
+  assert.match(adminHtml, /class="danger-action"/);
+  assert.doesNotMatch(operatorHtml, /deleteHistorySnapshot:/);
+  assert.match(operatorHtml, /data-action="openHistorySnapshot:history-delete-1"/);
+});
+
 test("history query orders snapshots from newest to oldest by saved_at", () => {
   const serviceSource = fs.readFileSync(
     new URL("../src/services/workDayService.js", import.meta.url),
@@ -127,6 +158,8 @@ test("history query orders snapshots from newest to oldest by saved_at", () => {
     /\.eq\("period_id",\s*periodId\)/,
   );
   assert.match(serviceSource, /input_state/);
+  assert.match(serviceSource, /delete_registro_history_snapshot/);
+  assert.match(serviceSource, /p_actor_role:\s*actorRole/);
 });
 
 test("history RPC remains append-only and does not update the operational pointer", () => {

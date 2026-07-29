@@ -2,7 +2,10 @@ import { formatCurrency, formatNumber } from "../domain/formatters.js?v=20260621
 import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-editable-loads-v2";
 import { simpleTable } from "../components/table.js?v=20260723-phase-d";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
-import { canEditHistory } from "../domain/permissions.js?v=20260723-excel-parity-v1";
+import {
+  canDeleteHistory,
+  canEditHistory,
+} from "../domain/permissions.js?v=20260727-history-delete-v1";
 import { reportScreen } from "./reportScreen.js?v=20260723-report-history-v1";
 
 function formatDateTime(value) {
@@ -58,10 +61,26 @@ function filterPanel(filters) {
   `;
 }
 
-function historyTable(snapshots, filters) {
+function historyTable(snapshots, filters, deletionContext = {}) {
   const filtered = snapshots.filter((snapshot) => snapshotMatches(snapshot, filters));
   const rows = filtered.map((snapshot) => {
     const summary = snapshot.summary ?? {};
+    const snapshotId = escapeHtml(snapshot.id);
+    const isDeleting =
+      deletionContext.deleteStatus === "deleting" &&
+      deletionContext.deletingSnapshotId === snapshot.id;
+    const deleteAction = deletionContext.allowed
+      ? `
+          <button
+            type="button"
+            class="danger-action"
+            data-action="deleteHistorySnapshot:${snapshotId}"
+            aria-label="Eliminar registro del ${escapeHtml(summary.workDate ?? "")}"
+            title="Eliminar registro"
+            ${deletionContext.deleteStatus === "deleting" ? "disabled" : ""}
+          >${isDeleting ? "Eliminando..." : "Eliminar"}</button>
+        `
+      : "";
     return [
       escapeHtml(summary.workDate ?? ""),
       escapeHtml(formatDateTime(snapshot.saved_at)),
@@ -72,7 +91,12 @@ function historyTable(snapshots, filters) {
       formatCurrency(summary.totalNutritionalCost ?? 0),
       escapeHtml(String(snapshot.saved_by ?? "").slice(0, 8)),
       escapeHtml(snapshot.snapshot_type ?? ""),
-      `<button type="button" class="secondary-action" data-action="openHistorySnapshot:${escapeHtml(snapshot.id)}">Ver registro</button>`,
+      `
+        <div class="history-row-actions">
+          <button type="button" class="secondary-action" data-action="openHistorySnapshot:${snapshotId}">Ver registro</button>
+          ${deleteAction}
+        </div>
+      `,
     ];
   });
 
@@ -95,6 +119,7 @@ function historyTable(snapshots, filters) {
 
 export function historyScreen(historyState, permissionContext = {}) {
   const historyEditable = canEditHistory(permissionContext.role);
+  const historyDeletable = canDeleteHistory(permissionContext.role);
   const selectedActions = historyState.selectedSnapshot
     ? `
         ${
@@ -162,6 +187,13 @@ export function historyScreen(historyState, permissionContext = {}) {
     ${historyState.message ? `<div class="history-message">${escapeHtml(historyState.message)}</div>` : ""}
     ${metrics}
     ${filterPanel(historyState.filters)}
-    ${section("Dias guardados", historyTable(historyState.snapshots, historyState.filters))}
+    ${section(
+      "Dias guardados",
+      historyTable(historyState.snapshots, historyState.filters, {
+        allowed: historyDeletable,
+        deleteStatus: historyState.deleteStatus,
+        deletingSnapshotId: historyState.deletingSnapshotId,
+      }),
+    )}
   `;
 }

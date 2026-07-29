@@ -32,6 +32,8 @@ export function createHistoryRuntimeState(overrides = {}) {
     draftComputedState: null,
     isEditing: false,
     saveStatus: "ready",
+    deleteStatus: "ready",
+    deletingSnapshotId: null,
     filters: {
       date: "",
       pen: "",

@@ -12,6 +12,7 @@ import {
   canEditInitialData,
   canEditLotField,
   canEditReport,
+  canDeleteHistory,
   canEditTreatmentConfig,
   canEditTreatmentIngredientLoads,
   canLockDiet,
@@ -127,6 +128,8 @@ test("both roles can record operations, save and consult history", () => {
   assert.equal(canEditReport(ROLES.OPERATOR), false);
   assert.equal(canEditHistory(ROLES.ADMIN), true);
   assert.equal(canEditHistory(ROLES.OPERATOR), false);
+  assert.equal(canDeleteHistory(ROLES.ADMIN), true);
+  assert.equal(canDeleteHistory(ROLES.OPERATOR), false);
   assert.equal(canViewDietConfiguration(ROLES.ADMIN), true);
   assert.equal(canViewDietConfiguration(ROLES.OPERATOR), false);
 });
@@ -143,6 +146,7 @@ test("unknown roles fail closed for every write and history permission", () => {
   assert.equal(canSaveHistory(unknownRole), false);
   assert.equal(canViewHistory(unknownRole), false);
   assert.equal(canEditHistory(unknownRole), false);
+  assert.equal(canDeleteHistory(unknownRole), false);
   assert.equal(canEditReport(unknownRole), false);
   assert.equal(canViewDietConfiguration(unknownRole), false);
 });

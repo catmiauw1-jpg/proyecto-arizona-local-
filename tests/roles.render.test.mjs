@@ -175,6 +175,56 @@ test("administrator can lock and unlock initial data but must unlock before edit
   assert.match(tagForAction(lockedHtml, "updateLot:lot-1:lotCode:text"), /\bdisabled\b/);
 });
 
+test("income lot selector limits visible rows and all feeding treatments", () => {
+  const baseState = stateWithActiveLot();
+  const state = {
+    ...baseState,
+    config: {
+      ...baseState.config,
+      activeLotCount: 4,
+    },
+  };
+  const computed = calculateState(state);
+  const adminIncomeHtml = incomeScreen(state, computed, {
+    role: ROLES.ADMIN,
+    initialDataLocked: false,
+  });
+  const operatorIncomeHtml = incomeScreen(state, computed, {
+    role: ROLES.OPERATOR,
+    initialDataLocked: true,
+  });
+  const feedingHtml = feedingScreen(
+    {
+      id: "ADAPTACION",
+      label: "ADAPTACION",
+      kind: "feeding",
+      dietId: "ADAPTACION",
+    },
+    state,
+    computed,
+    {
+      role: ROLES.OPERATOR,
+      dietLocked: true,
+      selectedTreatmentNumber: 1,
+    },
+  );
+  const selectorAction = "updateConfig:activeLotCount:integer";
+
+  assert.match(adminIncomeHtml, /Cantidad de lotes/);
+  assert.match(
+    adminIncomeHtml,
+    /data-action="updateConfig:activeLotCount:integer"[\s\S]*?<option value="4" selected/,
+  );
+  assert.doesNotMatch(tagForAction(adminIncomeHtml, selectorAction), /\bdisabled\b/);
+  assert.match(tagForAction(operatorIncomeHtml, selectorAction), /\bdisabled\b/);
+  assert.match(adminIncomeHtml, /updateLot:lot-4:lotCode:text/);
+  assert.doesNotMatch(adminIncomeHtml, /updateLot:lot-5:lotCode:text/);
+  assert.equal((feedingHtml.match(/data-treatment-piquete="1"/g) ?? []).length, 4);
+  assert.match(feedingHtml, /Piquetes A-1 a A-4/);
+  assert.doesNotMatch(feedingHtml, /Piquetes A-1 a A-20/);
+  assert.doesNotMatch(feedingHtml, /updateFeedingActual:ADAPTACION:lot-5:/);
+});
+
 test("diet lock and role disable ingredient editing with admin-only actions", () => {
   const state = stateWithActiveLot();
   const computed = calculateState(state);

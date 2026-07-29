@@ -1,7 +1,10 @@
 ﻿import { createEmptyPeriodState } from "../data/baseData.js?v=20260723-editable-loads-v2";
-import { calculateState } from "../domain/calculations.js?v=20260723-editable-loads-v2";
+import {
+  calculateState,
+  normalizeActiveLotCount,
+} from "../domain/calculations.js?v=20260727-active-lots-v1";
 
-import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260723-excel-parity-v1";
+import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260727-history-delete-v1";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -25,6 +28,9 @@ export function setState(nextState) {
     config: {
       ...emptyState.config,
       ...(nextState?.config ?? {}),
+      activeLotCount: normalizeActiveLotCount(
+        nextState?.config?.activeLotCount,
+      ),
     },
     diets: nextState?.diets ?? emptyState.diets,
     lots: nextState?.lots ?? emptyState.lots,
@@ -68,9 +74,11 @@ function emit() {
 }
 
 export function updateConfig(key, value) {
+  const nextValue =
+    key === "activeLotCount" ? normalizeActiveLotCount(value) : value;
   state = {
     ...state,
-    config: { ...state.config, [key]: value },
+    config: { ...state.config, [key]: nextValue },
   };
   emit();
 }

@@ -20,6 +20,7 @@ test("next day preserves master data and clears only daily operational values", 
     config: {
       ...emptyState.config,
       workDate: "2026-07-26",
+      activeLotCount: 6,
     },
     lots: emptyState.lots.map((lot, index) =>
       index === 0
@@ -70,6 +71,7 @@ test("next day preserves master data and clears only daily operational values", 
 
   assert.notStrictEqual(nextState, currentState);
   assert.equal(nextState.config.workDate, "2026-07-27");
+  assert.equal(nextState.config.activeLotCount, 6);
   assert.deepEqual(nextState.diets, currentState.diets);
   assert.deepEqual(nextState.lots, currentState.lots);
   assert.equal(nextState.lots[0].consumptionAdjustmentPct, 0.05);

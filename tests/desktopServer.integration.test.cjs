@@ -108,6 +108,51 @@ test("desktop SQLite API saves and lists work-day snapshots", async (context) =>
   assert.equal(listed.error, null);
   assert.equal(listed.data.length, 1);
   assert.equal(listed.data[0].input_state.config.workDate, "2026-07-26");
+
+  const history = await post("/api/local/rpc", {
+    name: "save_registro_history_snapshot",
+    params: {
+      p_work_day_id: active.data.work_day.id,
+      p_input_state: {
+        config: {
+          clientName: "Confinamiento Arizona",
+          workDate: "2026-07-26",
+        },
+      },
+      p_computed_state: { reportRows: [] },
+      p_summary: { workDate: "2026-07-26" },
+    },
+  });
+  assert.equal(history.error, null);
+
+  const deniedDeletion = await post("/api/local/rpc", {
+    name: "delete_registro_history_snapshot",
+    params: {
+      p_snapshot_id: history.data.snapshot_id,
+      p_period_id: active.data.period.id,
+    },
+  });
+  assert.match(deniedDeletion.error.message, /administrador/i);
+
+  const deleted = await post("/api/local/rpc", {
+    name: "delete_registro_history_snapshot",
+    params: {
+      p_snapshot_id: history.data.snapshot_id,
+      p_period_id: active.data.period.id,
+      p_actor_role: "admin_arizona",
+    },
+  });
+  assert.equal(deleted.error, null);
+  assert.equal(deleted.data.deleted, true);
+
+  const remainingHistory = await post("/api/local/query", {
+    table: "work_day_snapshots",
+    filters: [
+      { field: "period_id", value: active.data.period.id },
+      { field: "snapshot_type", value: "registro_history" },
+    ],
+  });
+  assert.deepEqual(remainingHistory.data, []);
 });
 
 test("desktop API rejects missing capabilities and reflected hostile origins", async (context) => {

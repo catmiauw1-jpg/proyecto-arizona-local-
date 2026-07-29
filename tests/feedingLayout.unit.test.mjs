@@ -34,8 +34,35 @@ test("ADAPTACION has modern treatment tabs, workspace and summary table", () => 
 
   assert.match(tabsRule, /display:\s*flex/);
   assert.match(tabsRule, /overflow-x:\s*auto/);
-  assert.match(workspaceRule, /grid-template-columns:\s*minmax\(280px,\s*340px\)\s*minmax\(0,\s*1fr\)/);
+  assert.match(workspaceRule, /grid-template-columns:\s*minmax\(320px,\s*380px\)\s*minmax\(0,\s*1fr\)/);
   assert.match(summaryRule, /min-width:\s*620px/);
+});
+
+test("modern treatment controls and tables use a readable scale", () => {
+  const tabRule = ruleBody(".adaptation-treatment-tab");
+  const tabTitleRule = ruleBody(".adaptation-treatment-tab span");
+  const workspaceRule = ruleBody(".adaptation-treatment-workspace");
+  const headingRule = ruleBody(".adaptation-panel-heading strong");
+  const piqueteTableRule = ruleBody(
+    ".adaptation-treatment-panel .treatment-piquete-table",
+  );
+  const piqueteCellRule = ruleBody(
+    ".adaptation-treatment-panel .treatment-piquete-table td",
+  );
+  const realizedInputRule = ruleBody(
+    ".adaptation-treatment-panel .excel-realized-cell input",
+  );
+
+  assert.match(tabRule, /min-height:\s*66px/);
+  assert.match(tabTitleRule, /font-size:\s*15px/);
+  assert.match(
+    workspaceRule,
+    /grid-template-columns:\s*minmax\(320px,\s*380px\)\s*minmax\(0,\s*1fr\)/,
+  );
+  assert.match(headingRule, /font-size:\s*19px/);
+  assert.match(piqueteTableRule, /font-size:\s*12px/);
+  assert.match(piqueteCellRule, /height:\s*34px/);
+  assert.match(realizedInputRule, /font-size:\s*12px/);
 });
 
 test("realizado cells use the same soft yellow as their header", () => {

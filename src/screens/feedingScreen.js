@@ -14,12 +14,12 @@ import {
 import {
   calculateFifthTreatmentBalance,
   calculateTreatmentIngredientLoads,
-} from "../domain/calculations.js?v=20260723-editable-loads-v2";
+} from "../domain/calculations.js?v=20260727-active-lots-v1";
 import {
   canEditFeedingActuals,
   canEditTreatmentConfig,
   canEditTreatmentIngredientLoads,
-} from "../domain/permissions.js?v=20260723-excel-parity-v1";
+} from "../domain/permissions.js?v=20260727-history-delete-v1";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 function feedingActualValue(state, dietId, lotId, treatment) {
@@ -39,18 +39,11 @@ function emptyTreatmentRows(calculatedDiet) {
   }));
 }
 
-function buildExcelLotRows(
-  state,
-  calculatedDiet,
-  plan,
-  { includeAllLots = false } = {},
-) {
+function buildExcelLotRows(state, calculatedDiet, plan) {
   const dietDryMatter = calculatedDiet.totals.dietDryMatterPct;
   const costBsKg = calculatedDiet.totals.costBsKg;
   const plannedRows = new Map(plan.lotRows.map((lot) => [lot.lotId, lot]));
-  const sourceLots = includeAllLots
-    ? state.lots
-    : state.lots.filter((lot) => plannedRows.has(lot.id));
+  const sourceLots = state.lots.filter((lot) => plannedRows.has(lot.id));
 
   return sourceLots.map((sourceLot) => {
     const lot = plannedRows.get(sourceLot.id) ?? {
@@ -381,6 +374,12 @@ function treatmentTabs(diet, selectedTreatmentNumber) {
   `;
 }
 
+function piqueteRangeLabel(lotRows) {
+  if (!lotRows.length) return "Sin piquetes activos";
+  if (lotRows.length === 1) return `Piquete ${lotRows[0].pen}`;
+  return `Piquetes ${lotRows[0].pen} a ${lotRows.at(-1).pen}`;
+}
+
 function treatmentPanel({
   active,
   calculatedDiet,
@@ -439,7 +438,7 @@ function treatmentPanel({
         <div class="adaptation-piquete-area">
           <div class="adaptation-panel-heading">
             <span>Distribución diaria</span>
-            <strong>Piquetes A-1 a A-20</strong>
+            <strong>${escapeHtml(piqueteRangeLabel(lotRows))}</strong>
           </div>
           <div class="table-wrap adaptation-piquete-table-wrap">
             ${excelTreatmentPiqueteTable(
@@ -501,9 +500,7 @@ export function feedingScreen(sheet, state, computed, permissionContext = {}) {
     "TRANSICION",
     "TERMINACION",
   ].includes(sheet.id);
-  const lotRows = buildExcelLotRows(state, calculatedDiet, plan, {
-    includeAllLots: usesModernTreatmentLayout,
-  });
+  const lotRows = buildExcelLotRows(state, calculatedDiet, plan);
   const requestedTreatmentNumber = Number(
     permissionContext.selectedTreatmentNumber,
   );

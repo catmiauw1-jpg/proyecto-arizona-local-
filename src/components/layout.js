@@ -8,7 +8,7 @@ import {
   ROLES,
   canViewDietConfiguration,
   roleLabel,
-} from "../domain/permissions.js?v=20260723-excel-parity-v1";
+} from "../domain/permissions.js?v=20260727-history-delete-v1";
 import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
 
 function localDevelopmentTool(roleContext) {

@@ -207,6 +207,13 @@ function executeRpc(database, name, params = {}) {
       summary: params.p_summary,
     });
   }
+  if (name === "delete_registro_history_snapshot") {
+    return database.deleteRegistroHistorySnapshot({
+      snapshotId: params.p_snapshot_id,
+      periodId: params.p_period_id,
+      actorRole: params.p_actor_role,
+    });
+  }
   if (name === "close_work_day") {
     return database.closeWorkDay({
       workDayId: params.p_work_day_id,

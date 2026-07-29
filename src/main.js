@@ -3,25 +3,26 @@ import { toNumber } from "./domain/formatters.js?v=20260621-stage1-clean-all";
 import {
   calculateState,
   recalculateReportRow,
-} from "./domain/calculations.js?v=20260724-video-fixes-v2";
+} from "./domain/calculations.js?v=20260727-active-lots-v1";
 import { buildNextWorkDayState } from "./domain/dayRollover.js?v=20260726-desktop-sqlite-v1";
 import { appLayout } from "./components/layout.js?v=20260723-excel-parity-v1";
 import { dietScreen } from "./screens/dietScreen.js?v=20260723-excel-parity-v1";
-import { feedingScreen } from "./screens/feedingScreen.js?v=20260723-adaptation-tabs-v3";
-import { incomeScreen } from "./screens/incomeScreen.js?v=20260723-excel-parity-v1";
+import { feedingScreen } from "./screens/feedingScreen.js?v=20260727-active-lots-v1";
+import { incomeScreen } from "./screens/incomeScreen.js?v=20260727-active-lots-v1";
 import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260723-excel-parity-v1";
 import { reportScreen } from "./screens/reportScreen.js?v=20260723-report-history-v1";
-import { historyScreen } from "./screens/historyScreen.js?v=20260723-report-history-v1";
+import { historyScreen } from "./screens/historyScreen.js?v=20260727-history-delete-v1";
 import { licenseScreen } from "./screens/licenseScreen.js?v=20260723-phase-e";
 import { loadingScreen, loginScreen } from "./screens/loginScreen.js?v=20260621-stage1-clean-all";
 import { loadAuthorizedSession, signInWithPassword, signOut } from "./services/authService.js?v=20260621-stage1-clean-all";
 import {
   closeWorkDayAndStartNext,
+  deleteRegistroHistorySnapshot,
   listRegistroHistorySnapshots,
   loadActiveWorkDay,
   saveRegistroHistorySnapshot,
   saveWorkDaySnapshot,
-} from "./services/workDayService.js?v=20260621-stage1-clean-all";
+} from "./services/workDayService.js?v=20260727-history-delete-v1";
 import {
   applyConsumptionFromCalculated,
   clearReportOverrides,
@@ -41,7 +42,7 @@ import {
   updateReportOverride,
   updateTreatmentIngredientActual,
   updateTreatment,
-} from "./state/store.js?v=20260723-excel-parity-v1";
+} from "./state/store.js?v=20260727-active-lots-v1";
 import {
   createAuthRuntimeState,
   createHistoryRuntimeState,
@@ -56,6 +57,7 @@ import {
   resetLicenseRuntime,
 } from "./services/localLicenseService.js?v=20260723-phase-e";
 import {
+  canDeleteHistory,
   canEditConsumptionNotes,
   canEditDiet,
   canEditFeedingActuals,
@@ -76,7 +78,7 @@ import {
   isLocalDevelopmentHost,
   normalizeRole,
   resolveOperationalRole,
-} from "./domain/permissions.js?v=20260723-excel-parity-v1";
+} from "./domain/permissions.js?v=20260727-history-delete-v1";
 import {
   buildDaySummary,
   buildRegistroHistorySummary,
@@ -105,6 +107,11 @@ const EDITABLE_REPORT_FIELDS = new Set([
   "cmsAnimal",
   "imsPct",
   "nutritionalCostAnimal",
+]);
+const EDITABLE_CONFIG_FIELDS = new Set([
+  "clientName",
+  "startDate",
+  "activeLotCount",
 ]);
 
 function todayIsoDate() {
@@ -421,11 +428,14 @@ function handleCommit(event) {
   }
 
   if (command === "updateConfig") {
-    if (!canEditIncomeConfig(role)) {
+    const [, key, type] = parts;
+    if (
+      !canEditIncomeConfig(role) ||
+      !EDITABLE_CONFIG_FIELDS.has(key)
+    ) {
       rejectUnauthorizedChange();
       return;
     }
-    const [, key, type] = parts;
     updateConfig(key, parseValue(event.target.value, type));
     markUnsaved();
     return;
@@ -643,6 +653,33 @@ function handleClick(event) {
       return;
     }
     void handleLoadHistory();
+    return;
+  }
+
+  if (action?.startsWith("deleteHistorySnapshot:")) {
+    if (!canDeleteHistory(role)) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    const [, snapshotId] = action.split(":");
+    const snapshot = historyState.snapshots.find((item) => item.id === snapshotId);
+    if (!snapshot || snapshot.snapshot_type !== "registro_history") {
+      historyState = {
+        ...historyState,
+        message: "El registro historico seleccionado ya no esta disponible.",
+      };
+      render();
+      return;
+    }
+    if (historyState.deleteStatus === "deleting") return;
+
+    const workDate = snapshot.summary?.workDate ?? "seleccionado";
+    const confirmed = window.confirm(
+      `¿Eliminar el registro historico del ${workDate}? Esta accion no se puede deshacer.`,
+    );
+    if (!confirmed) return;
+
+    void handleDeleteHistorySnapshot(snapshotId, role);
     return;
   }
 
@@ -1059,6 +1096,47 @@ async function handleSaveHistoryCorrection() {
       ...historyState,
       saveStatus: "error",
       message: error.message || "No se pudo guardar la corrección histórica.",
+    };
+  }
+
+  render();
+}
+
+async function handleDeleteHistorySnapshot(snapshotId, actorRole) {
+  const snapshot = historyState.snapshots.find((item) => item.id === snapshotId);
+  if (!snapshot || historyState.deleteStatus === "deleting") return;
+
+  historyState = {
+    ...historyState,
+    deleteStatus: "deleting",
+    deletingSnapshotId: snapshotId,
+    message: "",
+  };
+  render();
+
+  try {
+    const periodId = workDayState.period?.id ?? snapshot.period_id;
+    await deleteRegistroHistorySnapshot({ snapshotId, periodId, actorRole });
+    const snapshots = await listRegistroHistorySnapshots(periodId);
+    const deletedSelectedSnapshot = historyState.selectedSnapshot?.id === snapshotId;
+
+    historyState = {
+      ...historyState,
+      status: "ready",
+      snapshots,
+      selectedSnapshot: deletedSelectedSnapshot ? null : historyState.selectedSnapshot,
+      draftComputedState: deletedSelectedSnapshot ? null : historyState.draftComputedState,
+      isEditing: deletedSelectedSnapshot ? false : historyState.isEditing,
+      deleteStatus: "ready",
+      deletingSnapshotId: null,
+      message: "Registro histórico eliminado correctamente.",
+    };
+  } catch (error) {
+    historyState = {
+      ...historyState,
+      deleteStatus: "error",
+      deletingSnapshotId: null,
+      message: error.message || "No se pudo eliminar el registro historico.",
     };
   }
 

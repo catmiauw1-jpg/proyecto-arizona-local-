@@ -4,11 +4,14 @@ import test from "node:test";
 import { createEmptyPeriodState } from "../src/data/baseData.js";
 import { calculateState } from "../src/domain/calculations.js";
 import {
+  getComputedState,
   getState,
   resetState,
   setDietLocked,
   setInitialDataLocked,
   setState,
+  updateConfig,
+  updateLot,
 } from "../src/state/store.js";
 
 const expectedDefaults = {
@@ -31,6 +34,39 @@ test("new and legacy states receive unlocked access-control defaults", () => {
   });
 
   assert.deepEqual(getState().accessControl, expectedDefaults);
+  assert.equal(getState().config.activeLotCount, 20);
+});
+
+test("active lot count is normalized when loading and editing local data", () => {
+  setState({
+    ...createEmptyPeriodState(),
+    config: {
+      ...createEmptyPeriodState().config,
+      activeLotCount: 999,
+    },
+  });
+  assert.equal(getState().config.activeLotCount, 20);
+
+  updateConfig("activeLotCount", 0);
+  assert.equal(getState().config.activeLotCount, 1);
+
+  updateConfig("activeLotCount", 7.9);
+  assert.equal(getState().config.activeLotCount, 7);
+});
+
+test("hidden lot data returns intact when the active count increases", () => {
+  resetState();
+  updateLot("lot-10", "lotCode", "LOTE-CONSERVADO");
+  updateLot("lot-10", "animalCount", 45);
+
+  updateConfig("activeLotCount", 4);
+  assert.equal(getComputedState().lots.some((lot) => lot.id === "lot-10"), false);
+  assert.equal(getState().lots[9].lotCode, "LOTE-CONSERVADO");
+
+  updateConfig("activeLotCount", 10);
+  const restoredLot = getComputedState().lots.find((lot) => lot.id === "lot-10");
+  assert.equal(restoredLot.lotCode, "LOTE-CONSERVADO");
+  assert.equal(restoredLot.animalCount, 45);
 });
 
 test("lock setters update state immutably and reject unknown diets", () => {

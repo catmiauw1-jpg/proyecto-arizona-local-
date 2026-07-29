@@ -179,6 +179,30 @@ button {
   background: var(--panel-soft);
 }
 
+.danger-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid #d8aaa8;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: #ffffff;
+  color: var(--red);
+  font-weight: 800;
+}
+
+.danger-action:hover {
+  background: #fff2f1;
+}
+
+.history-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+
 .work-day-feedback {
   margin-bottom: 12px;
   padding: 8px 10px;
@@ -330,7 +354,8 @@ h2 {
 }
 
 .primary-action:disabled,
-.secondary-action:disabled {
+.secondary-action:disabled,
+.danger-action:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -529,6 +554,20 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.lot-count-control {
+  grid-template-columns: auto 82px;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.lot-count-control select {
+  min-width: 82px;
+  background: #fff5c7;
+  font-weight: 800;
+  text-align: center;
 }
 
 .metric-grid {
@@ -1121,26 +1160,27 @@ th:last-child {
 
 .adaptation-treatment-tab {
   display: grid;
-  min-width: 148px;
-  min-height: 58px;
-  flex: 1 0 148px;
+  min-width: 156px;
+  min-height: 66px;
+  flex: 1 0 156px;
   align-content: center;
-  gap: 3px;
+  gap: 4px;
   border: 1px solid var(--line);
   border-radius: 6px;
+  padding: 10px 12px;
   background: #f7f8f6;
   color: var(--ink);
   text-align: left;
 }
 
 .adaptation-treatment-tab span {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
 }
 
 .adaptation-treatment-tab small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .adaptation-treatment-tab:hover {
@@ -1168,7 +1208,7 @@ th:last-child {
 
 .adaptation-treatment-workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1179,7 +1219,7 @@ th:last-child {
 .adaptation-treatment-setup,
 .adaptation-piquete-area {
   min-width: 0;
-  padding: 16px;
+  padding: 20px;
 }
 
 .adaptation-treatment-setup {
@@ -1190,34 +1230,63 @@ th:last-child {
 .adaptation-panel-heading {
   display: grid;
   gap: 2px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .adaptation-panel-heading span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .adaptation-panel-heading strong {
   color: var(--green-dark);
-  font-size: 17px;
+  font-size: 19px;
 }
 
 .adaptation-config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.adaptation-config-grid label {
+  font-size: 13px;
+}
+
+.adaptation-config-grid input {
+  min-height: 38px;
+  font-size: 13px;
 }
 
 .adaptation-treatment-panel .treatment-loads {
-  padding-top: 10px;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.adaptation-treatment-panel .treatment-loads > span {
+  font-size: 12px;
+}
+
+.adaptation-treatment-panel .treatment-loads table {
+  font-size: 12px;
+}
+
+.adaptation-treatment-panel .treatment-loads th {
+  padding: 6px;
+  font-size: 10px;
+}
+
+.adaptation-treatment-panel .treatment-loads td {
+  padding: 6px 0;
 }
 
 .adaptation-treatment-panel .treatment-loads input {
+  min-height: 32px;
   background: #ffffff;
+  font-size: 12px;
 }
 
 .adaptation-treatment-panel .treatment-loads input:disabled {
@@ -1229,18 +1298,31 @@ th:last-child {
 }
 
 .adaptation-treatment-panel .treatment-piquete-table {
-  min-width: 540px;
+  min-width: 600px;
   border-top: 0;
+  font-size: 12px;
 }
 
 .adaptation-treatment-panel[data-treatment-panel="5"] .treatment-piquete-table {
-  min-width: 860px;
+  min-width: 920px;
 }
 
 .adaptation-treatment-panel .treatment-piquete-table th {
+  height: 44px;
   background: #e5eee9;
   color: #29453a;
-  font-size: 10px;
+  font-size: 11px;
+}
+
+.adaptation-treatment-panel .treatment-piquete-table td {
+  height: 34px;
+  padding: 5px 8px;
+}
+
+.adaptation-treatment-panel .excel-realized-cell input {
+  min-height: 33px;
+  padding: 5px 8px;
+  font-size: 12px;
 }
 
 .adaptation-treatment-panel .treatment-piquete-table .input-head {
@@ -1325,6 +1407,15 @@ th:last-child {
 }
 
 @media (max-width: 700px) {
+  .section-title:has(.lot-count-control) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lot-count-control {
+    grid-template-columns: 1fr 82px;
+  }
+
   .nav-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
