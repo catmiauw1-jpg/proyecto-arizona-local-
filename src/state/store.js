@@ -2,7 +2,7 @@
 import {
   calculateState,
   normalizeActiveLotCount,
-} from "../domain/calculations.js?v=20260727-active-lots-v1";
+} from "../domain/calculations.js?v=20260729-single-date-v2";
 
 import { DIET_IDS, createDefaultAccessControl } from "../domain/permissions.js?v=20260727-history-delete-v1";
 

@@ -15,6 +15,7 @@ export function createWorkDayRuntimeState(overrides = {}) {
     status: "idle",
     saveStatus: "ready",
     historyStatus: "ready",
+    dateStatus: "ready",
     period: null,
     workDay: null,
     workDate: null,

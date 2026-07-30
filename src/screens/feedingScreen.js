@@ -14,7 +14,7 @@ import {
 import {
   calculateFifthTreatmentBalance,
   calculateTreatmentIngredientLoads,
-} from "../domain/calculations.js?v=20260727-active-lots-v1";
+} from "../domain/calculations.js?v=20260729-single-date-v2";
 import {
   canEditFeedingActuals,
   canEditTreatmentConfig,
@@ -183,7 +183,7 @@ function excelTreatmentPiqueteTable(
                 }
                 <td class="excel-realized-cell" data-label="realizado">
                   ${valueInput({
-                    value: realizedValue,
+                    value: formatNumber(realizedValue),
                     type: "number",
                     onInput: `updateFeedingActual:${plan.dietId}:${lot.lotId}:${treatmentNumber}:number`,
                     disabled: !canEditFeedingActuals(permissionContext.role),
@@ -227,14 +227,21 @@ function treatmentIngredientLoadTable({
 }) {
   const treatmentActuals =
     state.treatmentIngredientActuals?.[dietId]?.[treatment.number] ?? {};
+  const activeIngredientIds = new Set(
+    calculatedDiet.rows
+      .filter((ingredient) => toNumber(ingredient.normalizedMoPct) > 0)
+      .map((ingredient) => ingredient.id),
+  );
   const rows = calculateTreatmentIngredientLoads(
     calculatedDiet,
     dietTotalMo,
     treatment,
-  ).map((row) => ({
-    ...row,
-    effectiveKg: treatmentActuals[row.ingredientId] ?? row.kg,
-  }));
+  )
+    .filter((row) => activeIngredientIds.has(row.ingredientId))
+    .map((row) => ({
+      ...row,
+      effectiveKg: treatmentActuals[row.ingredientId] ?? row.kg,
+    }));
 
   return `
     <div class="treatment-loads">

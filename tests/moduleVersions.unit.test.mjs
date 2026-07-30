@@ -10,6 +10,9 @@ const EDITABLE_LOADS_VERSION = "20260723-editable-loads-v2";
 const EXCEL_PARITY_VERSION = "20260723-excel-parity-v1";
 const ACTIVE_LOTS_VERSION = "20260727-active-lots-v1";
 const HISTORY_DELETE_VERSION = "20260727-history-delete-v1";
+const SINGLE_DATE_VERSION = "20260729-single-date-v2";
+const FEEDING_UI_VERSION = "20260729-active-ingredients-v1";
+const DATE_REOPEN_VERSION = "20260729-date-reopen-v1";
 
 async function javascriptFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -62,13 +65,7 @@ test("Excel parity changes are cache-busted through the browser entry chain", as
 
 test("active lot selection is cache-busted through the browser entry chain", async () => {
   const expectations = [
-    ["src/main.js", "domain/calculations.js"],
-    ["src/main.js", "screens/feedingScreen.js"],
-    ["src/main.js", "screens/incomeScreen.js"],
     ["src/main.js", "state/store.js"],
-    ["src/screens/feedingScreen.js", "domain/calculations.js"],
-    ["src/screens/incomeScreen.js", "domain/calculations.js"],
-    ["src/state/store.js", "domain/calculations.js"],
   ];
 
   for (const [sourcePath, importedPath] of expectations) {
@@ -83,10 +80,7 @@ test("active lot selection is cache-busted through the browser entry chain", asy
 
 test("history deletion is cache-busted through the browser entry chain", async () => {
   const expectations = [
-    ["index.html", "src/main.js"],
-    ["index.html", "src/styles.css"],
     ["src/main.js", "screens/historyScreen.js"],
-    ["src/main.js", "services/workDayService.js"],
     ["src/main.js", "domain/permissions.js"],
     ["src/screens/historyScreen.js", "domain/permissions.js"],
   ];
@@ -97,6 +91,65 @@ test("history deletion is cache-busted through the browser entry chain", async (
       source,
       new RegExp(`${importedPath.replaceAll("/", "\\/")}\\?v=${HISTORY_DELETE_VERSION}`),
       `${sourcePath} must import ${importedPath} with the history-delete cache version`,
+    );
+  }
+});
+
+test("single active date is cache-busted through the browser entry chain", async () => {
+  const expectations = [
+    ["index.html", "src/styles.css"],
+    ["src/main.js", "domain/calculations.js"],
+    ["src/main.js", "screens/incomeScreen.js"],
+    ["src/main.js", "state/runtimeState.js"],
+    ["src/screens/feedingScreen.js", "domain/calculations.js"],
+    ["src/screens/incomeScreen.js", "domain/calculations.js"],
+    ["src/screens/incomeScreen.js", "components/table.js"],
+    ["src/screens/incomeScreen.js", "components/fields.js"],
+    ["src/state/store.js", "domain/calculations.js"],
+    ["src/components/table.js", "fields.js"],
+  ];
+
+  for (const [sourcePath, importedPath] of expectations) {
+    const source = await readFile(path.resolve(sourcePath), "utf8");
+    assert.match(
+      source,
+      new RegExp(`${importedPath.replaceAll("/", "\\/")}\\?v=${SINGLE_DATE_VERSION}`),
+      `${sourcePath} must import ${importedPath} with the single-date cache version`,
+    );
+  }
+});
+
+test("feeding UI changes are cache-busted through the browser entry chain", async () => {
+  const expectations = [
+    ["src/main.js", "screens/feedingScreen.js"],
+  ];
+
+  for (const [sourcePath, importedPath] of expectations) {
+    const source = await readFile(path.resolve(sourcePath), "utf8");
+    assert.match(
+      source,
+      new RegExp(
+        `${importedPath.replaceAll("/", "\\/")}\\?v=${FEEDING_UI_VERSION}`,
+      ),
+      `${sourcePath} must import ${importedPath} with the feeding UI cache version`,
+    );
+  }
+});
+
+test("date reopening is cache-busted through the browser entry chain", async () => {
+  const expectations = [
+    ["index.html", "src/main.js"],
+    ["src/main.js", "services/workDayService.js"],
+  ];
+
+  for (const [sourcePath, importedPath] of expectations) {
+    const source = await readFile(path.resolve(sourcePath), "utf8");
+    assert.match(
+      source,
+      new RegExp(
+        `${importedPath.replaceAll("/", "\\/")}\\?v=${DATE_REOPEN_VERSION}`,
+      ),
+      `${sourcePath} must import ${importedPath} with the date-reopen cache version`,
     );
   }
 });

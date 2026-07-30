@@ -82,6 +82,35 @@ test(
       .locator('[data-action="setLocalRole"]')
       .selectOption("admin_arizona");
 
+    assert.equal(
+      await page.getByText("Fecha inicial", { exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await page.getByText("Fecha de trabajo", { exact: true }).count(),
+      0,
+    );
+    assert.equal(
+      await page
+        .locator('[data-action="updateLot:lot-1:entryDate:date"]')
+        .getAttribute("max"),
+      "2026-07-26",
+    );
+    await updateField(page, "changeActiveWorkDate:date", "2026-07-25");
+    await page.getByText("Fecha inicial actualizada a 2026-07-25.").waitFor();
+    await updateField(page, "changeActiveWorkDate:date", "2026-07-26");
+    await page.getByText("Fecha inicial actualizada a 2026-07-26.").waitFor();
+
+    await updateField(page, "updateLot:lot-1:entryDate:date", "2026-07-27");
+    await page
+      .getByText("La fecha de ingreso no puede ser posterior a la Fecha inicial.")
+      .waitFor();
+    assert.equal(
+      await page
+        .locator('[data-action="updateLot:lot-1:entryDate:date"]')
+        .inputValue(),
+      "",
+    );
     await updateField(page, "updateLot:lot-1:entryDate:date", "2026-07-20");
     await updateField(page, "updateLot:lot-1:lotCode:text", "LOTE-SQLITE");
     await updateField(page, "updateLot:lot-1:animalCount:number", "150");
@@ -118,10 +147,8 @@ test(
 
     assert.equal(
       await page
-        .getByText("Fecha de trabajo", { exact: true })
-        .locator("..")
-        .locator(".locked-field")
-        .textContent(),
+        .locator('[data-action="changeActiveWorkDate:date"]')
+        .inputValue(),
       "2026-07-27",
     );
     assert.equal(
@@ -180,10 +207,8 @@ test(
     await page.getByRole("link", { name: "INGRESO", exact: true }).click();
     assert.equal(
       await page
-        .getByText("Fecha de trabajo", { exact: true })
-        .locator("..")
-        .locator(".locked-field")
-        .textContent(),
+        .locator('[data-action="changeActiveWorkDate:date"]')
+        .inputValue(),
       "2026-07-27",
     );
     assert.equal(
@@ -191,6 +216,101 @@ test(
         .locator('[data-action="updateLot:lot-1:lotCode:text"]')
         .inputValue(),
       "LOTE-SQLITE",
+    );
+    assert.deepEqual(consoleErrors, []);
+    assert.deepEqual(pageErrors, []);
+  },
+);
+
+test(
+  "administrator reopens the latest closed date from Fecha inicial",
+  { timeout: 60_000 },
+  async (context) => {
+    const executablePath = findBrowserExecutable();
+    assert.ok(executablePath, "Se requiere Edge o Chrome para la prueba local.");
+
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "arizona-date-reopen-e2e-"),
+    );
+    const runtime = await startLocalAppServer({
+      projectRoot: path.resolve(__dirname, ".."),
+      port: 0,
+      databasePath: path.join(directory, "arizona.reopen.e2e.db"),
+      initialWorkDate: "2026-07-26",
+    });
+    const browser = await chromium.launch({
+      executablePath,
+      headless: true,
+    });
+    const page = await browser.newPage({
+      viewport: { width: 1440, height: 900 },
+    });
+    const consoleErrors = [];
+    const pageErrors = [];
+
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    context.after(async () => {
+      await browser.close();
+      await runtime.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    });
+
+    await page.goto(runtime.url, { waitUntil: "networkidle" });
+    await page.getByText("Ingreso de lotes y calculo inicial").waitFor();
+    await page
+      .locator('[data-action="setLocalRole"]')
+      .selectOption("admin_arizona");
+    await updateField(page, "updateLot:lot-1:lotCode:text", "LOTE-REABIERTO");
+    await updateField(page, "updateLot:lot-1:animalCount:number", "25");
+
+    await page.getByRole("link", { name: "REGISTRO", exact: true }).click();
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
+    await page.locator('[data-action="closeWorkDay"]').click();
+    await page.getByText(/2026-07-26 cerrado correctamente/).waitFor();
+
+    page.once("dialog", async (dialog) => {
+      assert.match(dialog.message(), /último día cerrado/i);
+      await dialog.accept();
+    });
+    await updateField(page, "changeActiveWorkDate:date", "2026-07-26");
+    await page.getByText(/2026-07-26 reabierto para corrección/i).waitFor();
+
+    assert.equal(
+      await page
+        .locator('[data-action="changeActiveWorkDate:date"]')
+        .inputValue(),
+      "2026-07-26",
+    );
+    assert.equal(
+      await page
+        .locator('[data-action="updateLot:lot-1:lotCode:text"]')
+        .inputValue(),
+      "LOTE-REABIERTO",
+    );
+
+    await page.getByRole("link", { name: "REGISTRO", exact: true }).click();
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
+    await page.locator('[data-action="closeWorkDay"]').click();
+    await page.getByText(/2026-07-26 cerrado correctamente/).waitFor();
+    assert.equal(
+      await page
+        .locator('[data-action="changeActiveWorkDate:date"]')
+        .inputValue(),
+      "2026-07-27",
+    );
+
+    await page.getByRole("link", { name: "HISTORIAL", exact: true }).click();
+    assert.equal(
+      await page.getByRole("button", { name: "Ver registro", exact: true }).count(),
+      2,
     );
     assert.deepEqual(consoleErrors, []);
     assert.deepEqual(pageErrors, []);

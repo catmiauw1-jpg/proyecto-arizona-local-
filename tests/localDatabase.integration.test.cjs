@@ -105,6 +105,176 @@ test("SQLite persists the active work day and manual saves across reopen", (cont
   reopened.close();
 });
 
+test("administrator can correct an unused active date and its automatic opening", (context) => {
+  const { database } = openTestDatabase(context);
+  const active = database.ensureActiveWorkDay();
+  const currentInput = sampleState("2026-07-26");
+  const closed = database.closeWorkDay({
+    workDayId: active.work_day.id,
+    inputState: currentInput,
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-26" },
+    nextInputState: sampleState("2026-07-27"),
+    nextComputedState: { reportRows: [] },
+    nextSummary: { workDate: "2026-07-27" },
+  });
+
+  const changed = database.changeActiveWorkDate({
+    workDayId: closed.next_work_day.id,
+    workDate: "2026-07-29",
+    actorRole: "admin_arizona",
+    inputState: sampleState("2026-07-29"),
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-29" },
+  });
+  const recovered = database.ensureActiveWorkDay();
+
+  assert.equal(changed.work_day.work_date, "2026-07-29");
+  assert.equal(recovered.work_day.work_date, "2026-07-29");
+  assert.equal(recovered.snapshot.snapshot_type, "day_opening");
+  assert.equal(recovered.snapshot.input_state.config.workDate, "2026-07-29");
+  assert.equal(
+    database.listWorkDaySnapshots({ snapshotType: "registro_history" })[0]
+      .summary.workDate,
+    "2026-07-26",
+  );
+});
+
+test("administrator can reopen the latest closed date from an unused active day", (context) => {
+  const { database } = openTestDatabase(context);
+  const active = database.ensureActiveWorkDay();
+  const closedInput = sampleState("2026-07-26", {
+    lots: [{ id: "lot-1", lotCode: "LOTE-CORREGIBLE" }],
+  });
+  const closed = database.closeWorkDay({
+    workDayId: active.work_day.id,
+    inputState: closedInput,
+    computedState: { reportRows: [{ lotCode: "LOTE-CORREGIBLE" }] },
+    summary: { workDate: "2026-07-26" },
+    nextInputState: sampleState("2026-07-27"),
+    nextComputedState: { reportRows: [] },
+    nextSummary: { workDate: "2026-07-27" },
+  });
+
+  const reopened = database.changeActiveWorkDate({
+    workDayId: closed.next_work_day.id,
+    workDate: "2026-07-26",
+    actorRole: "admin_arizona",
+    inputState: sampleState("2026-07-26"),
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-26" },
+  });
+  const recovered = database.ensureActiveWorkDay();
+
+  assert.equal(reopened.reopened, true);
+  assert.equal(reopened.work_day.id, closed.closed_work_day.id);
+  assert.equal(reopened.work_day.status, "active");
+  assert.equal(reopened.work_day.work_date, "2026-07-26");
+  assert.equal(reopened.snapshot.snapshot_type, "registro_history");
+  assert.equal(
+    reopened.snapshot.input_state.lots[0].lotCode,
+    "LOTE-CORREGIBLE",
+  );
+  assert.equal(recovered.work_day.id, closed.closed_work_day.id);
+  assert.equal(recovered.snapshot.input_state.lots[0].lotCode, "LOTE-CORREGIBLE");
+
+  const closedAgain = database.closeWorkDay({
+    workDayId: reopened.work_day.id,
+    inputState: reopened.snapshot.input_state,
+    computedState: reopened.snapshot.computed_state,
+    summary: reopened.snapshot.summary,
+    nextInputState: sampleState("2026-07-27"),
+    nextComputedState: { reportRows: [] },
+    nextSummary: { workDate: "2026-07-27" },
+  });
+
+  assert.equal(closedAgain.next_work_day.work_date, "2026-07-27");
+  assert.equal(
+    database.listWorkDaySnapshots({ snapshotType: "registro_history" }).length,
+    2,
+  );
+});
+
+test("reopening rejects unsaved changes from the current active day", (context) => {
+  const { database } = openTestDatabase(context);
+  const active = database.ensureActiveWorkDay();
+  const closed = database.closeWorkDay({
+    workDayId: active.work_day.id,
+    inputState: sampleState("2026-07-26"),
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-26" },
+    nextInputState: sampleState("2026-07-27"),
+    nextComputedState: { reportRows: [] },
+    nextSummary: { workDate: "2026-07-27" },
+  });
+
+  assert.throws(
+    () =>
+      database.changeActiveWorkDate({
+        workDayId: closed.next_work_day.id,
+        workDate: "2026-07-26",
+        actorRole: "admin_arizona",
+        inputState: sampleState("2026-07-26", {
+          lots: [{ id: "lot-1", lotCode: "CAMBIO-SIN-GUARDAR" }],
+        }),
+        computedState: { reportRows: [] },
+        summary: { workDate: "2026-07-26" },
+      }),
+    /cambios sin guardar/i,
+  );
+  assert.equal(
+    database.ensureActiveWorkDay().work_day.work_date,
+    "2026-07-27",
+  );
+});
+
+test("active date correction rejects operators and operational saves", (context) => {
+  const { database } = openTestDatabase(context);
+  const active = database.ensureActiveWorkDay();
+  const payload = {
+    workDayId: active.work_day.id,
+    workDate: "2026-07-29",
+    inputState: sampleState("2026-07-29"),
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-29" },
+  };
+
+  assert.throws(
+    () => database.changeActiveWorkDate({ ...payload, actorRole: "operator" }),
+    /administrador/i,
+  );
+
+  assert.throws(
+    () =>
+      database.changeActiveWorkDate({
+        ...payload,
+        workDate: "2026-07-19",
+        actorRole: "admin_arizona",
+        inputState: sampleState("2026-07-19", {
+          lots: [{ id: "lot-1", entryDate: "2026-07-20" }],
+        }),
+        summary: { workDate: "2026-07-19" },
+      }),
+    /fecha de ingreso/i,
+  );
+  assert.equal(database.ensureActiveWorkDay().work_day.work_date, "2026-07-26");
+
+  database.saveWorkDaySnapshot({
+    workDayId: active.work_day.id,
+    inputState: sampleState("2026-07-26"),
+    computedState: { reportRows: [] },
+    summary: { workDate: "2026-07-26" },
+  });
+  assert.throws(
+    () =>
+      database.changeActiveWorkDate({
+        ...payload,
+        actorRole: "admin_arizona",
+      }),
+    /guardados/i,
+  );
+});
+
 test("closing a day is append-only, atomic and opens the next calendar day", (context) => {
   const { database } = openTestDatabase(context);
   const active = database.ensureActiveWorkDay();

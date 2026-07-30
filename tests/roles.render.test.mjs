@@ -21,6 +21,22 @@ function stateWithActiveLot() {
   const emptyState = createEmptyPeriodState();
   return {
     ...emptyState,
+    diets: {
+      ...emptyState.diets,
+      ADAPTACION: {
+        ...emptyState.diets.ADAPTACION,
+        ingredients: emptyState.diets.ADAPTACION.ingredients.map(
+          (ingredient, index) =>
+            index === 0
+              ? {
+                  ...ingredient,
+                  dryMatterPct: 0.88,
+                  inclusionMsPct: 1,
+                }
+              : ingredient,
+        ),
+      },
+    },
     lots: emptyState.lots.map((lot, index) =>
       index === 0
         ? {
@@ -173,6 +189,34 @@ test("administrator can lock and unlock initial data but must unlock before edit
   assert.doesNotMatch(tagForAction(unlockedHtml, "updateLot:lot-1:lotCode:text"), /\bdisabled\b/);
   assert.match(lockedHtml, /data-action="unlockInitialData"/);
   assert.match(tagForAction(lockedHtml, "updateLot:lot-1:lotCode:text"), /\bdisabled\b/);
+});
+
+test("income uses one editable Fecha inicial tied to the active day", () => {
+  const state = {
+    ...stateWithActiveLot(),
+    config: {
+      ...stateWithActiveLot().config,
+      startDate: "2026-07-20",
+      workDate: "2026-07-29",
+    },
+  };
+  const html = incomeScreen(state, calculateState(state), {
+    role: ROLES.ADMIN,
+    initialDataLocked: false,
+    dateStatus: "ready",
+  });
+
+  assert.equal((html.match(/<span>Fecha inicial<\/span>/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /Fecha de trabajo/);
+  assert.match(
+    tagForAction(html, "changeActiveWorkDate:date"),
+    /value="2026-07-29"/,
+  );
+  assert.match(html, /data-action="syncActiveWorkDate"/);
+  assert.match(
+    tagForAction(html, "updateLot:lot-1:entryDate:date"),
+    /max="2026-07-29"/,
+  );
 });
 
 test("income lot selector limits visible rows and all feeding treatments", () => {
@@ -347,6 +391,45 @@ test("administrator can edit kg loads and yellow feeding actuals", () => {
   );
 });
 
+test("feeding actual inputs show two decimals with standard rounding", () => {
+  const baseState = stateWithActiveLot();
+  const state = {
+    ...baseState,
+    feedingActuals: {
+      ...baseState.feedingActuals,
+      ADAPTACION: {
+        "lot-1": {
+          1: 159.835,
+          2: 159.834,
+        },
+      },
+    },
+  };
+  const html = feedingScreen(
+    {
+      id: "ADAPTACION",
+      label: "ADAPTACION",
+      kind: "feeding",
+      dietId: "ADAPTACION",
+    },
+    state,
+    calculateState(state),
+    {
+      role: ROLES.ADMIN,
+      dietLocked: false,
+    },
+  );
+
+  assert.match(
+    tagForAction(html, "updateFeedingActual:ADAPTACION:lot-1:1:number"),
+    /value="159,84"/,
+  );
+  assert.match(
+    tagForAction(html, "updateFeedingActual:ADAPTACION:lot-1:2:number"),
+    /value="159,83"/,
+  );
+});
+
 test("feeding keeps automatic kilograms visible beside a manual load", () => {
   const emptyState = createEmptyPeriodState();
   const state = {
@@ -415,6 +498,109 @@ test("feeding keeps automatic kilograms visible beside a manual load", () => {
     /value="10,00"/,
   );
   assert.match(html, /data-treatment-piquete="1"[\s\S]*163,64/);
+});
+
+test("feeding shows only ingredients configured in its matching diet", () => {
+  const scenarios = [
+    {
+      dietId: "ADAPTACION",
+      activeIngredientId: "ad-1",
+      hiddenIngredientId: "ad-2",
+    },
+    {
+      dietId: "TRANSICION",
+      activeIngredientId: "tr-1",
+      hiddenIngredientId: "tr-2",
+    },
+    {
+      dietId: "TERMINACION",
+      activeIngredientId: "te-1",
+      hiddenIngredientId: "te-2",
+    },
+  ];
+
+  for (const {
+    dietId,
+    activeIngredientId,
+    hiddenIngredientId,
+  } of scenarios) {
+    const emptyState = createEmptyPeriodState();
+    const state = {
+      ...emptyState,
+      config: {
+        ...emptyState.config,
+        activeLotCount: 1,
+      },
+      diets: {
+        ...emptyState.diets,
+        [dietId]: {
+          ...emptyState.diets[dietId],
+          ingredients: emptyState.diets[dietId].ingredients.map(
+            (ingredient, index) =>
+              index === 0
+                ? {
+                    ...ingredient,
+                    dryMatterPct: 0.88,
+                    inclusionMsPct: 1,
+                  }
+                : ingredient,
+          ),
+        },
+      },
+      lots: emptyState.lots.map((lot, index) =>
+        index === 0
+          ? {
+              ...lot,
+              entryDate: emptyState.config.workDate,
+              animalCount: 10,
+              initialWeight: 300,
+              currentDiet: dietId,
+            }
+          : lot,
+      ),
+      treatmentIngredientActuals: {
+        [dietId]: {
+          1: {
+            [activeIngredientId]: 10,
+            [hiddenIngredientId]: 99,
+          },
+        },
+      },
+    };
+    const html = feedingScreen(
+      {
+        id: dietId,
+        label: dietId,
+        kind: "feeding",
+        dietId,
+      },
+      state,
+      calculateState(state),
+      {
+        role: ROLES.ADMIN,
+        dietLocked: false,
+        selectedTreatmentNumber: 1,
+      },
+    );
+
+    const activeInput = tagForAction(
+      html,
+      `updateTreatmentIngredientActual:${dietId}:1:${activeIngredientId}:number`,
+    );
+    const totalRow =
+      html.match(/<tr class="total-row">[\s\S]*?<\/tr>/)?.[0] ?? "";
+
+    assert.match(activeInput, /value="10,00"/);
+    assert.equal(
+      tagForAction(
+        html,
+        `updateTreatmentIngredientActual:${dietId}:1:${hiddenIngredientId}:number`,
+      ),
+      "",
+    );
+    assert.match(totalRow, /10,00/);
+    assert.doesNotMatch(totalRow, /99,00/);
+  }
 });
 
 test("ADAPTACION uses treatment tabs with A-1 to A-20 rows", () => {

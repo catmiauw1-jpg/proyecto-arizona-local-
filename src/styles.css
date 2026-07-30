@@ -602,6 +602,22 @@ h2 {
   gap: 14px;
 }
 
+.income-config-grid {
+  grid-template-columns: minmax(260px, 1fr) minmax(420px, 1fr);
+}
+
+.date-field {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.date-field .secondary-action {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .form-grid.small {
   grid-template-columns: repeat(2, minmax(180px, 280px));
 }
@@ -1393,6 +1409,10 @@ th:last-child {
   .form-grid,
   .form-grid.small,
   .treatment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .date-field {
     grid-template-columns: 1fr;
   }
 

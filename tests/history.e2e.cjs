@@ -396,11 +396,10 @@ test("validates append-only history, read-only consultation and reload locally",
   await page.getByText("Ingreso de lotes y calculo inicial").waitFor();
   await page.locator('[data-action="setLocalRole"]').selectOption("admin_arizona");
 
-  const workDateField = page
-    .getByText("Fecha de trabajo", { exact: true })
-    .locator("..")
-    .locator(".locked-field");
-  assert.equal(await workDateField.textContent(), activeWorkDate);
+  const workDateField = page.locator(
+    '[data-action="changeActiveWorkDate:date"]',
+  );
+  assert.equal(await workDateField.inputValue(), activeWorkDate);
 
   await updateField(page, "updateLot:lot-1:lotCode:text", "LOTE-A");
   await updateField(page, "updateLot:lot-1:animalCount:number", "10");
@@ -418,10 +417,8 @@ test("validates append-only history, read-only consultation and reload locally",
   );
   assert.equal(
     await page
-      .getByText("Fecha de trabajo", { exact: true })
-      .locator("..")
-      .locator(".locked-field")
-      .textContent(),
+      .locator('[data-action="changeActiveWorkDate:date"]')
+      .inputValue(),
     "2026-07-21",
   );
   assert.equal(
@@ -530,7 +527,9 @@ test("validates append-only history, read-only consultation and reload locally",
   );
   assert.equal(await page.locator('[data-action="updateLot:lot-1:animalCount:number"]').inputValue(), "20");
   assert.equal(
-    await page.getByText("Fecha de trabajo", { exact: true }).locator("..").locator(".locked-field").textContent(),
+    await page
+      .locator('[data-action="changeActiveWorkDate:date"]')
+      .inputValue(),
     "2026-07-22",
   );
 

@@ -113,6 +113,37 @@ test("whole-number diet percentages keep MO totals at the full-lot scale", () =>
   );
 });
 
+test("a future entry date never produces negative confinement days", () => {
+  const computed = calculateState({
+    config: {
+      workDate: "2026-07-27",
+      activeLotCount: 1,
+    },
+    diets: buildAllDiets(),
+    lots: [
+      {
+        id: "lot-1",
+        entryDate: "2026-07-29",
+        pen: "A-1",
+        lotCode: "NUEVO",
+        animalCount: 10,
+        initialWeight: 300,
+        initialImsPct: 1.6,
+        estimatedGmd: 1.5,
+        currentDiet: "ADAPTACION",
+        consumptionAdjustmentPct: 0,
+      },
+    ],
+    consumptionNotes: {},
+    feedingActuals: {},
+    treatmentIngredientActuals: {},
+    reportOverrides: {},
+  });
+
+  assert.equal(computed.lots[0].daysInConfinement, 0);
+  assert.equal(computed.lots[0].estimatedWeight, 300);
+});
+
 test("active lot count is normalized to the supported range", () => {
   assert.equal(normalizeActiveLotCount(undefined), 20);
   assert.equal(normalizeActiveLotCount("4"), 4);

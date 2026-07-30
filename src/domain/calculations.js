@@ -139,7 +139,10 @@ export function calculateLots(state, calculatedDiets) {
   return activeLots.map((lot) => {
     const diet = calculatedDiets[lot.currentDiet];
     const consumption = state.consumptionNotes[lot.id] ?? {};
-    const daysInConfinement = dateDiffInDays(workDate, lot.entryDate);
+    const daysInConfinement = Math.max(
+      0,
+      dateDiffInDays(workDate, lot.entryDate),
+    );
     const estimatedWeight = toNumber(lot.initialWeight) + daysInConfinement * toNumber(lot.estimatedGmd);
     const initialImsPct = percentFraction(lot.initialImsPct);
     const consumptionAdjustmentPct = percentFraction(lot.consumptionAdjustmentPct);

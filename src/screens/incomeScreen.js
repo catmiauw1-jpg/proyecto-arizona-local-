@@ -1,7 +1,7 @@
 ﻿import { DIET_LABELS, LOT_COLUMNS } from "../domain/model.js?v=20260723-phase-e";
 import { formatCell, formatNumber } from "../domain/formatters.js?v=20260621-stage1-clean-all";
 import { metricGrid, screenHeader, section } from "../components/layout.js?v=20260723-editable-loads-v2";
-import { dataTable, simpleTable } from "../components/table.js?v=20260723-phase-d";
+import { dataTable, simpleTable } from "../components/table.js?v=20260729-single-date-v2";
 
 import {
   canEditIncomeConfig,
@@ -9,18 +9,27 @@ import {
   canLockInitialData,
   canUnlockInitialData,
 } from "../domain/permissions.js?v=20260727-history-delete-v1";
-import { escapeHtml } from "../domain/html.js?v=20260723-history-validation";
-import { valueInput } from "../components/fields.js?v=20260723-phase-d";
+import { valueInput } from "../components/fields.js?v=20260729-single-date-v2";
 import {
   MAX_ACTIVE_LOTS,
   normalizeActiveLotCount,
-} from "../domain/calculations.js?v=20260727-active-lots-v1";
+} from "../domain/calculations.js?v=20260729-single-date-v2";
 
 export function incomeScreen(state, computed, permissionContext = {}) {
-  const { role, initialDataLocked = false } = permissionContext;
-  const columns = LOT_COLUMNS.map((column) =>
-    column.key === "currentDiet" ? { ...column, options: ["", ...DIET_LABELS] } : column,
-  );
+  const {
+    role,
+    initialDataLocked = false,
+    dateStatus = "ready",
+  } = permissionContext;
+  const columns = LOT_COLUMNS.map((column) => {
+    if (column.key === "currentDiet") {
+      return { ...column, options: ["", ...DIET_LABELS] };
+    }
+    if (column.key === "entryDate") {
+      return { ...column, max: state.config.workDate };
+    }
+    return column;
+  });
 
   const totalAnimals = computed.lots.reduce((total, lot) => total + Number(lot.animalCount || 0), 0);
   const totalMs = computed.lots.reduce((total, lot) => total + lot.totalFeedMs, 0);
@@ -59,7 +68,7 @@ export function incomeScreen(state, computed, permissionContext = {}) {
     (_, index) => String(index + 1),
   );
   const config = `
-    <div class="form-grid">
+    <div class="form-grid income-config-grid">
       <label>
         <span>Cliente</span>
         ${valueInput({
@@ -69,19 +78,25 @@ export function incomeScreen(state, computed, permissionContext = {}) {
           disabled: !configEditable,
         })}
       </label>
-      <label>
-        <span>Fecha inicial</span>
-        ${valueInput({
-          value: state.config.startDate,
-          type: "date",
-          onInput: "updateConfig:startDate:date",
-          disabled: !configEditable,
-        })}
-      </label>
-      <label>
-        <span>Fecha de trabajo</span>
-        <span class="locked-field">${escapeHtml(state.config.workDate)}</span>
-      </label>
+      <div class="date-field">
+        <label>
+          <span>Fecha inicial</span>
+          ${valueInput({
+            value: state.config.workDate,
+            type: "date",
+            onInput: "changeActiveWorkDate:date",
+            disabled: !configEditable || dateStatus === "saving",
+          })}
+        </label>
+        <button
+          class="secondary-action"
+          type="button"
+          data-action="syncActiveWorkDate"
+          ${!configEditable || dateStatus === "saving" ? "disabled" : ""}
+        >
+          Usar fecha actual
+        </button>
+      </div>
     </div>
   `;
 

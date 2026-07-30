@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
+const { isDeepStrictEqual } = require("node:util");
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const SNAPSHOT_COLUMNS = `
@@ -201,6 +202,26 @@ function createLocalDatabase({
     snapshotById: database.prepare(
       `SELECT ${SNAPSHOT_COLUMNS} FROM work_day_snapshots WHERE id = ? LIMIT 1`,
     ),
+    snapshotsForWorkDay: database.prepare(
+      `SELECT ${SNAPSHOT_COLUMNS}
+       FROM work_day_snapshots
+       WHERE work_day_id = ?
+       ORDER BY saved_at, rowid`,
+    ),
+    workDayByPeriodDate: database.prepare(
+      `SELECT * FROM work_days
+       WHERE period_id = ? AND work_date = ?
+       LIMIT 1`,
+    ),
+    latestClosedWorkDay: database.prepare(
+      `SELECT * FROM work_days
+       WHERE period_id = ? AND status = 'closed'
+       ORDER BY work_date DESC
+       LIMIT 1`,
+    ),
+    workDayCountForPeriod: database.prepare(
+      "SELECT COUNT(*) AS total FROM work_days WHERE period_id = ?",
+    ),
     latestHistoryForDay: database.prepare(
       `SELECT ${SNAPSHOT_COLUMNS}
        FROM work_day_snapshots
@@ -241,6 +262,30 @@ function createLocalDatabase({
       `UPDATE work_days
        SET last_snapshot_id = ?, last_saved_at = ?
        WHERE id = ?`,
+    ),
+    updateActiveWorkDate: database.prepare(
+      `UPDATE work_days
+       SET work_date = ?
+       WHERE id = ? AND status = 'active'`,
+    ),
+    updatePeriodStartDate: database.prepare(
+      "UPDATE periods SET start_date = ? WHERE id = ?",
+    ),
+    updateOpeningSnapshot: database.prepare(
+      `UPDATE work_day_snapshots
+       SET input_state = ?, computed_state = ?, summary = ?
+       WHERE id = ? AND snapshot_type = 'day_opening'`,
+    ),
+    deleteSnapshotsForWorkDay: database.prepare(
+      "DELETE FROM work_day_snapshots WHERE work_day_id = ?",
+    ),
+    deleteActiveWorkDay: database.prepare(
+      "DELETE FROM work_days WHERE id = ? AND status = 'active'",
+    ),
+    reopenWorkDay: database.prepare(
+      `UPDATE work_days
+       SET status = 'active', closed_at = NULL
+       WHERE id = ? AND status = 'closed'`,
     ),
     deleteHistorySnapshot: database.prepare(
       `DELETE FROM work_day_snapshots
@@ -447,6 +492,183 @@ function createLocalDatabase({
         saved_at: savedAt,
         work_day_id: workDayId,
         period_id: workDay.period_id,
+      };
+    } catch (error) {
+      database.exec("ROLLBACK;");
+      throw error;
+    }
+  }
+
+  function changeActiveWorkDate({
+    workDayId,
+    workDate,
+    actorRole,
+    inputState,
+    computedState,
+    summary,
+  }) {
+    if (actorRole !== "admin_arizona") {
+      throw new Error("Solo el administrador puede cambiar la Fecha inicial.");
+    }
+    assertIsoDate(workDate, "La Fecha inicial");
+    assertRecord(inputState, "inputState");
+    assertRecord(computedState, "computedState");
+    assertRecord(summary, "summary");
+
+    const workDay = requireActiveWorkDay(workDayId);
+    if (
+      inputState?.config?.workDate !== workDate ||
+      summary?.workDate !== workDate
+    ) {
+      throw new Error("Los datos no corresponden a la nueva Fecha inicial.");
+    }
+
+    const lots = Array.isArray(inputState.lots) ? inputState.lots : [];
+    const requestedActiveLotCount = Number(inputState.config?.activeLotCount);
+    const activeLotCount =
+      Number.isInteger(requestedActiveLotCount) && requestedActiveLotCount > 0
+        ? Math.min(requestedActiveLotCount, lots.length)
+        : lots.length;
+    const lotWithFutureEntry = lots
+      .slice(0, activeLotCount)
+      .find(
+        (lot) =>
+          ISO_DATE_PATTERN.test(String(lot?.entryDate ?? "")) &&
+          lot.entryDate > workDate,
+      );
+    if (lotWithFutureEntry) {
+      throw new Error(
+        `La Fecha inicial no puede ser anterior a la fecha de ingreso de ${lotWithFutureEntry.pen || lotWithFutureEntry.id || "un lote activo"}.`,
+      );
+    }
+
+    const snapshots = statements.snapshotsForWorkDay.all(workDayId);
+    if (snapshots.some((snapshot) => snapshot.snapshot_type !== "day_opening")) {
+      throw new Error(
+        "La Fecha inicial no puede cambiarse porque el día ya tiene datos guardados.",
+      );
+    }
+
+    const latestClosed = statements.latestClosedWorkDay.get(workDay.period_id);
+    const requestedWorkDay = statements.workDayByPeriodDate.get(
+      workDay.period_id,
+      workDate,
+    );
+    const canReopenLatestClosed =
+      latestClosed &&
+      requestedWorkDay &&
+      requestedWorkDay.id === latestClosed.id &&
+      requestedWorkDay.status === "closed";
+    if (canReopenLatestClosed) {
+      const openingSnapshot = snapshots.find(
+        (snapshot) => snapshot.snapshot_type === "day_opening",
+      );
+      const openingInputState = mapSnapshot(openingSnapshot)?.input_state;
+      const comparableInputState = {
+        ...inputState,
+        config: {
+          ...(inputState.config ?? {}),
+          workDate: workDay.work_date,
+        },
+      };
+      if (
+        !openingInputState ||
+        !isDeepStrictEqual(openingInputState, comparableInputState)
+      ) {
+        throw new Error(
+          "El día activo tiene cambios sin guardar. Recargue la aplicación para descartarlos antes de reabrir el día anterior.",
+        );
+      }
+      const latestSnapshot = requestedWorkDay.last_snapshot_id
+        ? statements.snapshotById.get(requestedWorkDay.last_snapshot_id)
+        : null;
+      if (!latestSnapshot) {
+        throw new Error(
+          "El último día cerrado no tiene una fotografía recuperable.",
+        );
+      }
+
+      database.exec("BEGIN IMMEDIATE;");
+      try {
+        statements.deleteSnapshotsForWorkDay.run(workDayId);
+        const deleted = statements.deleteActiveWorkDay.run(workDayId);
+        if (Number(deleted.changes) !== 1) {
+          throw new Error("No se pudo retirar el día automático vacío.");
+        }
+        const reopened = statements.reopenWorkDay.run(requestedWorkDay.id);
+        if (Number(reopened.changes) !== 1) {
+          throw new Error("No se pudo reabrir el último día cerrado.");
+        }
+        database.exec("COMMIT;");
+
+        return {
+          reopened: true,
+          period: mapPeriod(statements.periodById.get(workDay.period_id)),
+          work_day: mapWorkDay(statements.workDayById.get(requestedWorkDay.id)),
+          snapshot: mapSnapshot(latestSnapshot),
+        };
+      } catch (error) {
+        database.exec("ROLLBACK;");
+        throw error;
+      }
+    }
+    if (latestClosed && workDate <= latestClosed.work_date) {
+      throw new Error(
+        `La Fecha inicial debe ser posterior al último día cerrado (${latestClosed.work_date}).`,
+      );
+    }
+
+    const conflictingWorkDay = statements.workDayByPeriodDate.get(
+      workDay.period_id,
+      workDate,
+    );
+    if (conflictingWorkDay && conflictingWorkDay.id !== workDayId) {
+      throw new Error("Ya existe un día de trabajo con esa fecha.");
+    }
+
+    const isFirstWorkDay =
+      !latestClosed &&
+      Number(statements.workDayCountForPeriod.get(workDay.period_id).total) === 1;
+    const storedInputState = isFirstWorkDay
+      ? {
+          ...inputState,
+          config: {
+            ...(inputState.config ?? {}),
+            startDate: workDate,
+            workDate,
+          },
+        }
+      : inputState;
+
+    database.exec("BEGIN IMMEDIATE;");
+    try {
+      const updated = statements.updateActiveWorkDate.run(workDate, workDayId);
+      if (Number(updated.changes) !== 1) {
+        throw new Error("No se pudo actualizar la Fecha inicial.");
+      }
+
+      if (isFirstWorkDay) {
+        statements.updatePeriodStartDate.run(workDate, workDay.period_id);
+      }
+
+      for (const snapshot of snapshots) {
+        statements.updateOpeningSnapshot.run(
+          serialize(storedInputState, "inputState"),
+          serialize(computedState, "computedState"),
+          serialize(summary, "summary"),
+          snapshot.id,
+        );
+      }
+      database.exec("COMMIT;");
+
+      const updatedWorkDay = statements.workDayById.get(workDayId);
+      const updatedSnapshot = updatedWorkDay.last_snapshot_id
+        ? statements.snapshotById.get(updatedWorkDay.last_snapshot_id)
+        : null;
+      return {
+        period: mapPeriod(statements.periodById.get(workDay.period_id)),
+        work_day: mapWorkDay(updatedWorkDay),
+        snapshot: mapSnapshot(updatedSnapshot),
       };
     } catch (error) {
       database.exec("ROLLBACK;");
@@ -686,6 +908,7 @@ function createLocalDatabase({
     importLegacyDatabase,
     ensureActiveWorkDay,
     saveWorkDaySnapshot,
+    changeActiveWorkDate,
     saveRegistroHistorySnapshot,
     deleteRegistroHistorySnapshot,
     listWorkDaySnapshots,

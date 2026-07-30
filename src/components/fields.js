@@ -9,8 +9,10 @@ export function valueInput({
   options = [],
   disabled = false,
   calculatedValue,
+  max,
 }) {
   const disabledAttributes = disabled ? 'disabled aria-disabled="true"' : "";
+  const maxAttribute = max ? `max="${escapeHtml(max)}"` : "";
   const calculatedAttribute =
     calculatedValue === undefined
       ? ""
@@ -59,6 +61,7 @@ export function valueInput({
       ${isNumeric ? `inputmode="${type === "percentInteger" ? "numeric" : "decimal"}"` : ""}
       value="${escapeHtml(shownValue ?? "")}"
       data-action="${escapeHtml(onInput)}"
+      ${maxAttribute}
       ${calculatedAttribute}
       ${disabledAttributes}
     />

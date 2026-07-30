@@ -155,6 +155,49 @@ test("desktop SQLite API saves and lists work-day snapshots", async (context) =>
   assert.deepEqual(remainingHistory.data, []);
 });
 
+test("desktop API changes only an unused active date as administrator", async (context) => {
+  const runtime = await startLocalAppServer({
+    projectRoot: path.resolve(__dirname, ".."),
+    port: 0,
+    initialWorkDate: "2026-07-26",
+  });
+  context.after(() => runtime.close());
+  const bootstrap = await fetch(runtime.url);
+  const cookie = bootstrap.headers.get("set-cookie")?.split(";")[0];
+  const origin = new URL(runtime.url).origin;
+  const post = async (body) => {
+    const response = await fetch(new URL("/api/local/rpc", runtime.url), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+        Cookie: cookie,
+      },
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const active = await post({ name: "ensure_active_work_day", params: {} });
+  const changed = await post({
+    name: "change_active_work_date",
+    params: {
+      p_work_day_id: active.data.work_day.id,
+      p_work_date: "2026-07-29",
+      p_actor_role: "admin_arizona",
+      p_input_state: {
+        config: { workDate: "2026-07-29" },
+      },
+      p_computed_state: { reportRows: [] },
+      p_summary: { workDate: "2026-07-29" },
+    },
+  });
+
+  assert.equal(changed.error, null);
+  assert.equal(changed.data.work_day.work_date, "2026-07-29");
+  assert.equal(changed.data.period.start_date, "2026-07-29");
+});
+
 test("desktop API rejects missing capabilities and reflected hostile origins", async (context) => {
   const runtime = await startLocalAppServer({
     projectRoot: path.resolve(__dirname, ".."),

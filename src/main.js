@@ -3,12 +3,12 @@ import { toNumber } from "./domain/formatters.js?v=20260621-stage1-clean-all";
 import {
   calculateState,
   recalculateReportRow,
-} from "./domain/calculations.js?v=20260727-active-lots-v1";
+} from "./domain/calculations.js?v=20260729-single-date-v2";
 import { buildNextWorkDayState } from "./domain/dayRollover.js?v=20260726-desktop-sqlite-v1";
 import { appLayout } from "./components/layout.js?v=20260723-excel-parity-v1";
 import { dietScreen } from "./screens/dietScreen.js?v=20260723-excel-parity-v1";
-import { feedingScreen } from "./screens/feedingScreen.js?v=20260727-active-lots-v1";
-import { incomeScreen } from "./screens/incomeScreen.js?v=20260727-active-lots-v1";
+import { feedingScreen } from "./screens/feedingScreen.js?v=20260729-active-ingredients-v1";
+import { incomeScreen } from "./screens/incomeScreen.js?v=20260729-single-date-v2";
 import { consumptionScreen } from "./screens/consumptionScreen.js?v=20260723-excel-parity-v1";
 import { reportScreen } from "./screens/reportScreen.js?v=20260723-report-history-v1";
 import { historyScreen } from "./screens/historyScreen.js?v=20260727-history-delete-v1";
@@ -17,12 +17,13 @@ import { loadingScreen, loginScreen } from "./screens/loginScreen.js?v=20260621-
 import { loadAuthorizedSession, signInWithPassword, signOut } from "./services/authService.js?v=20260621-stage1-clean-all";
 import {
   closeWorkDayAndStartNext,
+  changeActiveWorkDate,
   deleteRegistroHistorySnapshot,
   listRegistroHistorySnapshots,
   loadActiveWorkDay,
   saveRegistroHistorySnapshot,
   saveWorkDaySnapshot,
-} from "./services/workDayService.js?v=20260727-history-delete-v1";
+} from "./services/workDayService.js?v=20260729-date-reopen-v1";
 import {
   applyConsumptionFromCalculated,
   clearReportOverrides,
@@ -47,7 +48,7 @@ import {
   createAuthRuntimeState,
   createHistoryRuntimeState,
   createWorkDayRuntimeState,
-} from "./state/runtimeState.js?v=20260723-phase-e";
+} from "./state/runtimeState.js?v=20260729-single-date-v2";
 import {
   changeLocalLicenseScenario,
   getLicenseEvaluation,
@@ -110,7 +111,6 @@ const EDITABLE_REPORT_FIELDS = new Set([
 ]);
 const EDITABLE_CONFIG_FIELDS = new Set([
   "clientName",
-  "startDate",
   "activeLotCount",
 ]);
 
@@ -160,7 +160,12 @@ function buildPermissionContext(state, sheet = findSheet()) {
 
 function routeContent(sheet, state, computed, permissionContext) {
   if (sheet.kind === "license") return licenseScreen(permissionContext.license);
-  if (sheet.id === "Ingreso") return incomeScreen(state, computed, permissionContext);
+  if (sheet.id === "Ingreso") {
+    return incomeScreen(state, computed, {
+      ...permissionContext,
+      dateStatus: workDayState.dateStatus,
+    });
+  }
   if (sheet.kind === "diet") {
     if (!canViewDietConfiguration(permissionContext.role)) {
       return '<div class="history-message">Este módulo está reservado para el administrador.</div>';
@@ -175,6 +180,7 @@ function routeContent(sheet, state, computed, permissionContext) {
   }
   if (sheet.kind === "consumption") return consumptionScreen(computed, permissionContext);
   if (sheet.kind === "report") {
+    const changingActiveDate = workDayState.dateStatus === "saving";
     return reportScreen(computed, {
       snapshots: historyState.snapshots,
       historyStatus: historyState.status,
@@ -182,8 +188,8 @@ function routeContent(sheet, state, computed, permissionContext) {
       editable: canEditReport(permissionContext.role),
       canSaveWorkDay: canSaveWorkDay(permissionContext.role),
       canCloseWorkDay: canSaveHistory(permissionContext.role),
-      saveStatus: workDayState.saveStatus,
-      closeStatus: workDayState.historyStatus,
+      saveStatus: changingActiveDate ? "saving" : workDayState.saveStatus,
+      closeStatus: changingActiveDate ? "saving" : workDayState.historyStatus,
     });
   }
   if (sheet.kind === "history" && canViewHistory(permissionContext.role)) {
@@ -247,6 +253,7 @@ function applyLoadedWorkDay({ period, workDay, snapshot }) {
     status: "ready",
     saveStatus: snapshot ? "saved" : "ready",
     historyStatus: "ready",
+    dateStatus: "ready",
     period,
     workDay,
     workDate,
@@ -267,6 +274,7 @@ async function initializeWorkDay() {
       status: "error",
       saveStatus: "error",
       historyStatus: "ready",
+      dateStatus: "error",
       period: null,
       workDay: null,
       workDate: null,
@@ -393,6 +401,15 @@ function handleCommit(event) {
     return;
   }
 
+  if (workDayState.dateStatus === "saving") {
+    workDayState = {
+      ...workDayState,
+      message: "Espere a que termine la actualización de la Fecha inicial.",
+    };
+    render();
+    return;
+  }
+
   if (
     editingHistoricalSnapshot() &&
     (command !== "updateHistoricalReport" || !canEditHistory(role))
@@ -424,6 +441,16 @@ function handleCommit(event) {
     }
     updateReportOverride(lotId, key, parseValue(event.target.value, type));
     markUnsaved();
+    return;
+  }
+
+  if (command === "changeActiveWorkDate") {
+    const [, type] = parts;
+    if (!canEditIncomeConfig(role) || editingHistoricalSnapshot()) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    void handleChangeActiveWorkDate(parseValue(event.target.value, type), role);
     return;
   }
 
@@ -480,7 +507,21 @@ function handleCommit(event) {
       rejectUnauthorizedChange();
       return;
     }
-    updateLot(lotId, key, parseValue(event.target.value, type));
+    const value = parseValue(event.target.value, type);
+    if (
+      key === "entryDate" &&
+      value &&
+      state.config.workDate &&
+      value > state.config.workDate
+    ) {
+      workDayState = {
+        ...workDayState,
+        message: "La fecha de ingreso no puede ser posterior a la Fecha inicial.",
+      };
+      render();
+      return;
+    }
+    updateLot(lotId, key, value);
     markUnsaved();
     return;
   }
@@ -585,7 +626,25 @@ function handleClick(event) {
     return;
   }
 
+  if (workDayState.dateStatus === "saving") {
+    workDayState = {
+      ...workDayState,
+      message: "Espere a que termine la actualización de la Fecha inicial.",
+    };
+    render();
+    return;
+  }
+
   const role = activeRole();
+
+  if (action === "syncActiveWorkDate") {
+    if (!canEditIncomeConfig(role) || editingHistoricalSnapshot()) {
+      rejectUnauthorizedChange();
+      return;
+    }
+    void handleChangeActiveWorkDate(todayIsoDate(), role);
+    return;
+  }
 
   if (action === "clearReportOverrides") {
     if (!canEditReport(role) || editingHistoricalSnapshot()) {
@@ -779,7 +838,12 @@ async function handleSaveWorkDay(successMessage = "Guardado correctamente.") {
     rejectLicenseChange();
     return false;
   }
-  if (workDayState.saveStatus === "saving") return false;
+  if (
+    workDayState.saveStatus === "saving" ||
+    workDayState.dateStatus === "saving"
+  ) {
+    return false;
+  }
   if (!workDayState.workDay?.id) {
     workDayState = {
       ...workDayState,
@@ -829,6 +893,135 @@ async function handleSaveWorkDay(successMessage = "Guardado correctamente.") {
   return saved;
 }
 
+async function handleChangeActiveWorkDate(workDate, actorRole) {
+  if (!licenseAllowsOperations()) {
+    rejectLicenseChange();
+    return;
+  }
+  if (
+    workDayState.dateStatus === "saving" ||
+    workDayState.saveStatus === "saving" ||
+    workDayState.historyStatus === "saving"
+  ) {
+    return;
+  }
+  if (!workDayState.workDay?.id) {
+    workDayState = {
+      ...workDayState,
+      dateStatus: "error",
+      message: "No hay un día activo para actualizar.",
+    };
+    render();
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(workDate ?? ""))) {
+    workDayState = {
+      ...workDayState,
+      dateStatus: "error",
+      message: "Seleccione una Fecha inicial válida.",
+    };
+    render();
+    return;
+  }
+  if (workDate === workDayState.workDay.work_date) {
+    workDayState = {
+      ...workDayState,
+      dateStatus: "ready",
+      message: "La Fecha inicial ya está actualizada.",
+    };
+    render();
+    return;
+  }
+  if (
+    workDate < workDayState.workDay.work_date &&
+    workDayState.period?.start_date !== workDayState.workDay.work_date &&
+    !window.confirm(
+      "Está seleccionando una fecha anterior. Si corresponde al último día " +
+        "cerrado, ese día se reabrirá con sus datos guardados y se descartará " +
+        "la apertura automática actual solamente si no tiene cambios sin guardar. " +
+        "¿Desea continuar?",
+    )
+  ) {
+    render();
+    return;
+  }
+
+  const currentState = clone(getState());
+  const inputState = {
+    ...currentState,
+    config: {
+      ...(currentState.config ?? {}),
+      workDate,
+    },
+  };
+  const computedState = calculateState(inputState);
+  const summary = buildDaySummary(inputState, computedState);
+
+  workDayState = {
+    ...workDayState,
+    dateStatus: "saving",
+    message: "",
+  };
+  render();
+
+  try {
+    const result = await changeActiveWorkDate({
+      workDayId: workDayState.workDay.id,
+      workDate,
+      actorRole,
+      inputState,
+      computedState,
+      summary,
+    });
+    const resolvedWorkDate = result.workDay?.work_date ?? workDate;
+    const recoveredInputState = clone(
+      result.snapshot?.input_state ?? inputState,
+    );
+    const committedState = {
+      ...recoveredInputState,
+      config: {
+        ...(recoveredInputState.config ?? {}),
+        startDate:
+          result.period?.start_date ??
+          recoveredInputState.config?.startDate ??
+          inputState.config.startDate,
+        workDate: resolvedWorkDate,
+      },
+    };
+
+    workDayState = {
+      ...workDayState,
+      dateStatus: "saved",
+      saveStatus: "saved",
+      historyStatus: "ready",
+      period: result.period ?? workDayState.period,
+      workDay: result.workDay ?? {
+        ...workDayState.workDay,
+        work_date: resolvedWorkDate,
+      },
+      workDate: resolvedWorkDate,
+      lastSavedAt:
+        result.snapshot?.saved_at ??
+        workDayState.lastSavedAt,
+      message: result.reopened
+        ? `Día ${resolvedWorkDate} reabierto para corrección. Se recuperaron sus datos guardados.`
+        : `Fecha inicial actualizada a ${resolvedWorkDate}.`,
+    };
+    setState(committedState);
+    historyState = {
+      ...createHistoryRuntimeState(),
+      status: "idle",
+    };
+  } catch (error) {
+    workDayState = {
+      ...workDayState,
+      dateStatus: "error",
+      message: error.message || "No se pudo actualizar la Fecha inicial.",
+    };
+    render();
+  }
+}
+
 async function handleInitialDataLock(locked) {
   if (!licenseAllowsOperations()) {
     rejectLicenseChange();
@@ -846,7 +1039,11 @@ async function handleInitialDataLock(locked) {
     return;
   }
   if (!locked && !window.confirm("¿Desea desbloquear los datos iniciales?")) return;
-  if (workDayState.saveStatus === "saving" || !workDayState.workDay?.id) {
+  if (
+    workDayState.saveStatus === "saving" ||
+    workDayState.dateStatus === "saving" ||
+    !workDayState.workDay?.id
+  ) {
     workDayState = {
       ...workDayState,
       message: "No es posible cambiar el bloqueo mientras el día no está listo.",
@@ -881,7 +1078,11 @@ async function handleDietLock(dietId, locked) {
     return;
   }
   if (!locked && !window.confirm("¿Desea desbloquear la dieta?")) return;
-  if (workDayState.saveStatus === "saving" || !workDayState.workDay?.id) {
+  if (
+    workDayState.saveStatus === "saving" ||
+    workDayState.dateStatus === "saving" ||
+    !workDayState.workDay?.id
+  ) {
     workDayState = {
       ...workDayState,
       message: "No es posible cambiar el bloqueo mientras el día no está listo.",
@@ -902,7 +1103,12 @@ async function handleSaveRegistroHistory() {
     rejectLicenseChange();
     return;
   }
-  if (workDayState.historyStatus === "saving") return;
+  if (
+    workDayState.historyStatus === "saving" ||
+    workDayState.dateStatus === "saving"
+  ) {
+    return;
+  }
   if (!workDayState.workDay?.id) {
     workDayState = {
       ...workDayState,
@@ -955,6 +1161,7 @@ async function handleCloseWorkDay() {
   }
   if (
     workDayState.historyStatus === "saving" ||
+    workDayState.dateStatus === "saving" ||
     !workDayState.workDay?.id
   ) {
     return;

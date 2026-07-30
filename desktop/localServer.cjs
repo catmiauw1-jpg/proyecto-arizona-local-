@@ -199,6 +199,16 @@ function executeRpc(database, name, params = {}) {
       summary: params.p_summary,
     });
   }
+  if (name === "change_active_work_date") {
+    return database.changeActiveWorkDate({
+      workDayId: params.p_work_day_id,
+      workDate: params.p_work_date,
+      actorRole: params.p_actor_role,
+      inputState: params.p_input_state,
+      computedState: params.p_computed_state,
+      summary: params.p_summary,
+    });
+  }
   if (name === "save_registro_history_snapshot") {
     return database.saveRegistroHistorySnapshot({
       workDayId: params.p_work_day_id,

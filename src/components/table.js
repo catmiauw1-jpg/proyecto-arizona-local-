@@ -1,4 +1,4 @@
-﻿import { calculatedCell, valueInput } from "./fields.js?v=20260723-phase-d";
+﻿import { calculatedCell, valueInput } from "./fields.js?v=20260729-single-date-v2";
 
 export function dataTable({
   columns,
@@ -45,6 +45,7 @@ export function dataTable({
                             options: column.options ?? [],
                             onInput: `${actionPrefix}:${rowId(row)}:${column.key}:${column.type}`,
                             disabled: !editable,
+                            max: column.max,
                           })}
                         </td>
                       `;

@@ -5,6 +5,7 @@ function normalizeWorkDayPayload(data) {
     period: data?.period ?? null,
     workDay: data?.work_day ?? null,
     snapshot: data?.snapshot ?? null,
+    reopened: data?.reopened === true,
   };
 }
 
@@ -34,6 +35,31 @@ export async function saveWorkDaySnapshot({ workDayId, inputState, computedState
   }
 
   return data;
+}
+
+export async function changeActiveWorkDate({
+  workDayId,
+  workDate,
+  actorRole,
+  inputState,
+  computedState,
+  summary,
+}) {
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase.rpc("change_active_work_date", {
+    p_work_day_id: workDayId,
+    p_work_date: workDate,
+    p_actor_role: actorRole,
+    p_input_state: inputState,
+    p_computed_state: computedState,
+    p_summary: summary,
+  });
+
+  if (error) {
+    throw new Error(error.message || "No se pudo actualizar la Fecha inicial.");
+  }
+
+  return normalizeWorkDayPayload(data);
 }
 
 export async function saveRegistroHistorySnapshot({ workDayId, inputState, computedState, summary }) {
