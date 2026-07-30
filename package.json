@@ -1,6 +1,6 @@
 {
   "name": "confinamiento-arizona-history-validation",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Sistema local de gestion para Confinamiento Arizona",
   "main": "desktop/main.cjs",
   "type": "module",

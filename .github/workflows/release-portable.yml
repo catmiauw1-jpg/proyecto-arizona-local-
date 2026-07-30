@@ -1,0 +1,44 @@
+name: Publicar portable de Windows
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar pruebas unitarias
+        run: npm run test:unit
+
+      - name: Compilar portable
+        run: npm run build:desktop
+
+      - name: Publicar version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $package = Get-Content package.json | ConvertFrom-Json
+          $asset = "release/Confinamiento-Arizona-Portable-$($package.version).exe"
+          gh release create "${{ github.ref_name }}" $asset `
+            --repo "${{ github.repository }}" `
+            --title "Confinamiento Arizona ${{ github.ref_name }}" `
+            --notes "Version portable local para Windows. Los datos se guardan en la computadora y no requieren servicios en la nube."
